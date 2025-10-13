@@ -2,6 +2,17 @@ require('dotenv').config();
 const axios = require('axios');
 
 /**
+ * Configuração para aceitar certificados SSL auto-assinados
+*/
+
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+// Criar agent HTTPS
+const httpsAgent = new https.Agent({
+    rejectUnauthorized: false
+});
+
+/**
  * Configuração do cliente HTTP para APIs externas
  */
 const apiConfig = {
@@ -10,7 +21,8 @@ const apiConfig = {
     headers: {
         'Authorization': `Bearer ${process.env.API_BEARER_TOKEN}`,
         'Content-Type': 'application/json'
-    }
+    },
+    httpsAgent: httpsAgent
 };
 
 /**
@@ -18,10 +30,12 @@ const apiConfig = {
  */
 const apiClient = axios.create(apiConfig);
 
-// Ignorar SSL em desenvolvimento (ADICIONAR AQUI)
-if (process.env.NODE_ENV === 'development') {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+/*
+    // Ignorar SSL em desenvolvimento (ADICIONAR AQUI)
+    if (process.env.NODE_ENV === 'development') {
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    }
+*/
 
 /**
  * Função auxiliar para formatar logs de requisição
