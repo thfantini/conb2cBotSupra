@@ -1,4 +1,5 @@
 require('dotenv').config();
+const https = require('https');
 const axios = require('axios');
 
 /**
@@ -67,14 +68,9 @@ async function executeRequest(method, url, options = {}, retries = 3) {
     
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            const httpsAgent = new https.Agent({
-                rejectUnauthorized: false
-            });
-            
             const response = await apiClient({
                 method,
                 url,
-                httpsAgent,
                 ...options
             });
             
