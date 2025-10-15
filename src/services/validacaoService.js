@@ -152,6 +152,27 @@ function normalizarTelefoneApi(telefone) {
 }
 
 /**
+ * Remove DDD do telefone
+ * @param {string} telefone - Telefone com ou sem DDD
+ * @returns {string} Telefone no formato CEL (ex: 994931105)
+ */
+function normalizarTelefoneERP(telefone) {
+    const telefoneLimpo = telefone.replace(/\D/g, '');
+    let telefoneERP = telefoneLimpo;
+    console.log('normalizarTelefoneERP: ');
+    console.log('telefoneERP: ', telefoneERP);
+
+    // Se tem 11 dígitos: DDD + Numero
+    if (telefoneERP.length === 11) {
+        console.log('normalizarTelefone: ', telefoneERP);
+        return telefoneERP.substring(2);
+    }
+
+    // Retorna
+    return telefoneERP;
+}
+
+/**
  * Valida telefone com múltiplos contatos para mesmo CNPJ
  * Implementa lógica completa de validação de permissões
  * @param {string} cnpj - CNPJ do cliente
@@ -485,6 +506,7 @@ module.exports = {
     validarFormatoTelefone,
 	normalizarTelefoneWhatsApp,
     normalizarTelefoneApi,
+    normalizarTelefoneERP,
     validarIdParceiro,
     
     // Validações de negócio

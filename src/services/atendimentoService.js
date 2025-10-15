@@ -85,10 +85,35 @@ function verificarPalavrasChaveAtendente(mensagem) {
         'humano',
         'sim'
     ];
-    
+
+    console.log('verificarPalavrasChaveAtendente: ', mensagem);
+
+    // O metodo 'some' retorna true assim que encontra a primeira correspondência
+    const mensagemLower = mensagem.toLowerCase().trim();
+    return palavrasChave.some(palavra => mensagemLower.includes(palavra));
+}
+
+/**
+ * Verifica se a mensagem contém palavras-chave para boleto
+ * @param {string} mensagem - Mensagem recebida do cliente
+ * @returns {string} palavra-chave encontrada ou undefined
+ */
+function verificarPalavrasChaveBoleto(mensagem) {
+    const palavrasChave = [
+        'boleto',
+        'bolto',
+        'contas',
+        'aberto'
+    ];
+
+    console.log('verificarPalavrasChaveBoleto: ', mensagem);
     const mensagemLower = mensagem.toLowerCase().trim();
     
-    return palavrasChave.some(palavra => mensagemLower.includes(palavra));
+    // O metodo 'find' retorna a palavra-chave encontrada (string) ou undefined
+    return palavrasChave.find(palavra => mensagemLower.includes(palavra));
+
+    // O metodo 'some' retorna true assim que encontra a primeira correspondência
+    // return palavrasChave.some(palavra => mensagemLower.includes(palavra));
 }
 
 
@@ -105,7 +130,7 @@ async function fluxoAtendimento(telefone, mensagem, messageId) {
         return await processarEncerramentoManual(telefone);
     }
 
-    // Verificação global de palavras-chave para atendente
+    // Verificação global de palavras-chave para Atendente
     if (verificarPalavrasChaveAtendente(mensagem)) {
         const estadosQuePermitemAtendente = [
             'aguardando_novo_cnpj',
@@ -116,6 +141,20 @@ async function fluxoAtendimento(telefone, mensagem, messageId) {
         
         if (estadosQuePermitemAtendente.includes(estado.etapa)) {
             return await processarTransferenciaAtendente(telefone, estado.cliente, messageId);
+        }
+    }
+
+    // Verificação global de palavras-chave para Boleto > Somente autorizado
+    const buscaBoleto = verificarPalavrasChaveBoleto(mensagem);
+    if (buscaBoleto && estado.cliente) {
+        const estadosQuePermitemBoleto = [
+            'consultando_boletos',
+            'menu_principal'
+        ];
+
+        console.log(`A mensagem é sobre: ${buscaBoleto}`);
+        if (estadosQuePermitemBoleto.includes(estado.etapa)) {
+            return await etapaMenuPrincipal(telefone, 'boletos', messageId, estado);
         }
     }
     
@@ -179,35 +218,56 @@ async function etapaInicial(telefone, mensagem, messageId) {
             '👋 Olá! Bem-vindo ao nosso atendimento.\n\n' +
             'Para continuar, por favor, informe seu *CNPJ*:'
         );
-        estadosUsuarios.set(telefone, { etapa: 'aguardando_cnpj' });
+
+        // Armazenar mensagem inicial para verificar palavra-chave após validação
+        estadosUsuarios.set(telefone, {
+            etapa: 'aguardando_cnpj',
+            mensagemInicial: mensagem
+        });
+
         return { status: 'aguardando_cnpj' };
     }
     
     // Cliente encontrado e autorizado
     const cliente = clienteAPI.data.data[0];
     const contato = clienteAPI.contato;
-    
+
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        `👋 Olá, *${contato.nome}*!\n\n` +
+        `👋 Olá, ${contato.nome}!\n\n` +
+        `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
         `Empresa: *${cliente.nome}*\n` +
-        `CNPJ: *${cliente.cpfCnpj}*\n\n` +
-        `Bem-vindo(a) ao nosso atendimento.\n` +
-        'Como posso ajudar você hoje?'
+        `CNPJ: ${cliente.cpfCnpj}\n\n` +
+        `Bem-vindo(a) ao nosso atendimento.`
     );
-    
-    //await whatsappService.mostrarMenuPrincipal(telefone);
-    //await whatsappService.enviarMenuPrincipal(telefone);
-    await enviarMenuPrincipal(telefone);
-    
+
+    // Atualizar estado com cliente autorizado
     estadosUsuarios.set(telefone, {
         etapa: 'menu_principal',
         cliente: cliente,
         contato: contato,
         messageId: messageId
     });
-    
+
+    // Verificar se mensagem inicial contém palavra-chave de boleto
+    const buscaBoleto = verificarPalavrasChaveBoleto(mensagem);
+    if (buscaBoleto) {
+        console.log(`🎯 Palavra-chave detectada na mensagem inicial: ${buscaBoleto}`);
+        console.log('🚀 Executando consulta de boletos automaticamente...');
+
+        // Executar consulta de boletos diretamente
+        return await processarOpcaoBoletos(telefone, cliente, messageId);
+    }
+
+    // Se não houver palavra-chave, exibir menu principal
+    await evolutionAPI.sendTextMessage(
+        telefone,
+        'Como posso ajudar você hoje?'
+    );
+
+    await enviarMenuPrincipal(telefone);
+
     return { status: 'menu_exibido', cliente, contato };
 }
 
@@ -216,21 +276,44 @@ async function etapaInicial(telefone, mensagem, messageId) {
  */
 async function etapaValidarCNPJ(telefone, cnpj, messageId) {
     console.log('🔍 Etapa: Validar CNPJ');
-    
+
     const resultado = await processarOpcaoCNPJ(telefone, cnpj, messageId);
-    
+
     if (resultado.sucesso) {
+        // Atualizar estado com cliente autorizado
         estadosUsuarios.set(telefone, {
             etapa: 'menu_principal',
             cliente: resultado.cliente,
             contato: resultado.contato,
             messageId: messageId
         });
+
+        // Verificar se há mensagem prévia armazenada para detectar palavra-chave
+        const estado = estadosUsuarios.get(telefone);
+        const mensagemInicial = estado.mensagemInicial || cnpj;
+
+        // Verificar se mensagem contém palavra-chave de boleto
+        const buscaBoleto = verificarPalavrasChaveBoleto(mensagemInicial);
+        if (buscaBoleto) {
+            console.log(`🎯 Palavra-chave detectada após validação CNPJ: ${buscaBoleto}`);
+            console.log('🚀 Executando consulta de boletos automaticamente...');
+
+            // Executar consulta de boletos diretamente
+            return await processarOpcaoBoletos(telefone, resultado.cliente, messageId);
+        }
+
+        // Se não houver palavra-chave, exibir menu principal
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            'Como posso ajudar você hoje?'
+        );
+
+        await enviarMenuPrincipal(telefone);
     } else {
         // Manter na mesma etapa para nova tentativa
         estadosUsuarios.set(telefone, { etapa: 'aguardando_cnpj' });
     }
-    
+
     return resultado;
 }
 
@@ -245,6 +328,8 @@ async function etapaMenuPrincipal(telefone, opcao, messageId, estado) {
     switch (opcao.toLowerCase()) {
         case '1':
         case 'boletos':
+            console.log('etapaMenuPrincipal: boletos');
+            console.log(cliente);
             return await processarOpcaoBoletos(telefone, cliente, messageId);
             
         /*
@@ -485,25 +570,13 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        `✅ Olá, *${contatoAutorizado.nome}*!\n\n` +
+        `👋 Olá, ${contatoAutorizado.nome}!\n\n` +
+        `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
         `Empresa: *${cliente.nome}*\n` +
-        `CNPJ: *${cnpjFormatado}*\n\n` +
-        'Como posso ajudar você hoje?'
+        `CNPJ: ${cnpjFormatado}\n\n` +
+        'Bem-vindo(a) ao nosso atendimento.'
     );
-    
-    // Mostrar menu principal
-    // TODO: Alterar para: enviarMenuPrincipal
-    await evolutionAPI.sendTextMessage(
-        telefone,
-        '📋 *Menu de Opções*\n\n' +
-        'Escolha uma das opções:\n\n' +
-        '1️⃣ Boletos em Aberto\n' +
-        '2️⃣ Notas Fiscais\n' +
-        '3️⃣ Certificados\n' +
-        '4️⃣ Propostas Comerciais\n' +
-        '5️⃣ Falar com Atendente'
-    );
-    
+
     // Registrar atendimento iniciado
     await database.registrarAtendimento({
         messageId,
@@ -520,9 +593,9 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
             status: 'autorizado'
         }]
     });
-    
-    return { 
-        sucesso: true, 
+
+    return {
+        sucesso: true,
         cliente: cliente,
         contato: contatoAutorizado
     };
@@ -538,7 +611,7 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        '🔍 Consultando seus boletos em aberto...'
+        'Estou consultando os seus boletos em aberto...'
     );
     
     // Recupera Dados do cliente
@@ -570,15 +643,24 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     const boletoLink = `https://boleto.suprasoft.net/?idConta=`;
     
     // Enviar cada boleto
+    let linhaDigitavelBoleto = '';
     for (const boleto of boletos.data) {
+        
+        //Verifica Linha Digitavel
+        if(boleto.linhaDigitavelBoleto){
+            linhaDigitavelBoleto = `*Linha Digitável:*\n${boleto.linhaDigitavelBoleto}\n`;
+        }
         
         // TODO: Criar funcao em: mensagens.js
         const mensagem = 
-            `📄 *Boleto ${boleto.numeroDocumento}*\n\n` +
-            `📅 Vencimento: ${formatarData(boleto.dataVencimento)}\n` +
-            `💰 Valor: R$ ${boleto.valor.toFixed(2)}\n\n` +
-            `*Linha Digitável:*\n${boleto.idConta}${boleto.numeroDocumento}\n\n` +
-            `*Link:*\n${boletoLink}${boleto.idConta}&${boleto.numeroDocumento}`;
+            `📄 *Boleto: ${boleto.numeroDocumento}*\n\n` +
+            //`📅 Vencimento: ${formatarData(boleto.dataVencimento)}\n` +
+            //`💰 Valor: R$ ${boleto.valor.toFixed(2)}\n\n${linhaDigitavelBoleto}` +
+            `Vencimento: ${formatarDataERP(boleto.dataVencimento)}\n` +
+            `Valor: R$ ${boleto.valor.toFixed(2)}\n${linhaDigitavelBoleto}` ;
+            //`*Linha Digitável:*\n${boleto.idConta}${boleto.numeroDocumento}\n\n` +
+            //`*Link:*\n${boletoLink}${boleto.idConta}&${boleto.numeroDocumento}`;
+            //`\n`;
         
         await evolutionAPI.sendTextMessage(telefone, mensagem);
         
@@ -586,7 +668,7 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Envia Boleto PDF
-        await enviarBoletoPDF(telefone, boleto.idConta);
+        await enviarBoletoPDF(telefone, boleto.idConta, boleto.numeroDocumento);
 
         // Aguardar 3 segundo entre envios
         await new Promise(resolve => setTimeout(resolve, 3000));
@@ -596,7 +678,8 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        `📊 Total de ${boletos.data.length} boleto(s) encontrado(s).\n\n` +
+        //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
+        `Encontrei *${boletos.data.length}* boleto(s).\n\n` +
         'Posso ajudar com algo mais?'
     );
     
@@ -611,7 +694,7 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
  * Enviar Boleto PDF
  */
 
-async function enviarBoletoPDF(telefone, idConta) {
+async function enviarBoletoPDF(telefone, idConta, numeroDocumento) {
     console.log('📄 Gerando PDF do boleto:', idConta);
     
     // Gerar PDF
@@ -621,26 +704,29 @@ async function enviarBoletoPDF(telefone, idConta) {
     if (!boletoPDF.success) {
         await evolutionAPI.sendTextMessage(
             telefone,
-            '❌ Não foi possível gerar o boleto.\n\nTente novamente mais tarde.'
+            `❌ Infelizmente não foi possível gerar o boleto: ${numeroDocumento}. Tente novamente mais tarde, por favor.`
         );
         return { success: false };
     }
     
+    // TODO: Criar funcao em: mensagens.js
     // Enviar PDF via WhatsApp
     const envio = await evolutionAPI.sendDocument(
         telefone,
         boletoPDF.data.base64,
         boletoPDF.data.filename,
-        '📄 Aqui está seu boleto'
+        `✅ Segue boleto: ${numeroDocumento}`
     );
     
-    // TODO: Criar funcao em: mensagens.js
-    if (envio.success) {
-        await evolutionAPI.sendTextMessage(
-            telefone,
-            '✅ Boleto enviado com sucesso!'
-        );
-    }
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        if (envio.success) {
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                '✅ Boleto enviado com sucesso!'
+            );
+        }
+    */
     
     return envio;
 }
@@ -899,6 +985,17 @@ async function processarTransferenciaAtendente(telefone, cliente, messageId) {
 function formatarData(data) {
     const d = new Date(data);
     return d.toLocaleDateString('pt-BR');
+}
+
+/**
+ * Formatar data para exibição
+ */
+function formatarDataERP(data) {
+    // 1. Pega apenas a data (os 10 primeiros caracteres)
+    const dataPart = data.substring(0, 10); // "10-09-2025"
+    
+    // 2. Substitui todos os traços por barras
+    return dataPart.replace(/-/g, '/'); // "10/09/2025"
 }
 
 module.exports = {

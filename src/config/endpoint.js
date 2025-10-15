@@ -249,21 +249,53 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     }
 
     // Limpa o telefone para comparação (remove caracteres especiais)
-    const telefoneLimpo = telefone.replace(/\D/g, '');
+    // const telefoneLimpo = telefone.replace(/\D/g, '');
+    const validacaoService = require('../services/validacaoService');
+    const telefoneLimpo = validacaoService.normalizarTelefoneERP(telefone);
     console.log('telefoneLimpo: ', telefoneLimpo);
+
+    // // Busca contatos que possuem telefone correspondente ao número informado
+    // const contatosComTelefone = cliente.contatos.filter(contato => {
+    //     // Ignora contatos sem telefone
+    //     if (!contato.telefone) return false;
+        
+    //     console.log('contato.nome: ', contato.nome);
+    //     console.log('contato.telefone: ', contato.telefone);
+    //     console.log('contato.emailFaturamento: ', contato.emailFaturamento);
+        
+    //     // Verifica Contato > Telefone
+    //     let contatoTelefone = contato.telefone.replace(/\D/g, '');
+    //     return contatoTelefone === telefoneLimpo;
+
+    //     // Verifica Contato > Celular
+    //     let contatoCelular = contato.celular.replace(/\D/g, '');
+    //     return contatoCelular === telefoneLimpo;
+    // });
 
     // Busca contatos que possuem telefone correspondente ao número informado
     const contatosComTelefone = cliente.contatos.filter(contato => {
-        // Ignora contatos sem telefone
-        if (!contato.telefone) return false;
+
+        // Ignora contatos sem Telefone e Celular
+        if (!contato.telefone && !contato.celular) {
+            return false; 
+        }
         
-        console.log('contato.nome: ', contato.nome);
-        console.log('contato.telefone: ', contato.telefone);
-        console.log('contato.emailFaturamento: ', contato.emailFaturamento);
-        
-        // Limpa telefone do contato e compara
-        const contatoTelefoneLimpo = contato.telefone.replace(/\D/g, '');
-        return contatoTelefoneLimpo === telefoneLimpo;
+        // Verifica Contato > Telefone
+        let telefoneCorresponde = false;
+        if (contato.telefone) {
+            let contatoTelefoneLimpo = contato.telefone.replace(/\D/g, '');
+            telefoneCorresponde = (contatoTelefoneLimpo === telefoneLimpo);
+        }
+
+        // Verifica Contato > Celular (se telefone nao correspondeu)
+        let celularCorresponde = false;
+        if (contato.celular) {
+            let contatoCelularLimpo = contato.celular.replace(/\D/g, '');
+            celularCorresponde = (contatoCelularLimpo === telefoneLimpo);
+        }
+
+        // 2. Retorna true se corresponder
+        return telefoneCorresponde || celularCorresponde;
     });
 
     console.log('- Total de contatos:', cliente.contatos.length);
@@ -441,7 +473,116 @@ async function getBoletosByCNPJ(idParceiro) {
  * @returns {Promise<Object>} Dados do boleto em base64
  */
 async function geraBoletoPDF(idConta) {
-    console.log('geraBoletoPDF:', idConta);
+    console.log('🔄 geraBoletoPDF - Iniciando:', idConta);
+
+    try {
+        // Fazer requisição com responseType arraybuffer para receber dados binários
+        const response = await apiClient({
+            method: 'GET',
+            url: '/financeiro/boletosPDF',
+            params: { idConta: idConta },
+            responseType: 'arraybuffer',
+            validateStatus: function (status) {
+                // Aceitar qualquer status para tratar manualmente
+                return status >= 200 && status < 600;
+            }
+        });
+
+        console.log('📊 Status da resposta:', response.status);
+        console.log('📊 Content-Type:', response.headers['content-type']);
+
+        // Se o status não for 200, tentar parsear como JSON de erro
+        if (response.status !== 200) {
+            let errorMessage = 'Erro ao gerar boleto';
+
+            try {
+                // Tentar converter buffer para JSON
+                const errorData = JSON.parse(Buffer.from(response.data).toString('utf-8'));
+                errorMessage = errorData.message || errorMessage;
+                console.log('❌ Erro JSON detectado:', errorData);
+            } catch (e) {
+                console.log('❌ Não foi possível parsear erro como JSON');
+            }
+
+            return {
+                success: false,
+                error: errorMessage,
+                data: null
+            };
+        }
+
+        // Verificar se é PDF (binário) pelo Content-Type ou pela presença do header PDF
+        const contentType = response.headers['content-type'];
+        const isPDF = contentType && (
+            contentType.includes('application/pdf') ||
+            contentType.includes('application/octet-stream')
+        );
+
+        // Se não for PDF, pode ser um JSON de erro
+        if (!isPDF) {
+            try {
+                const errorData = JSON.parse(Buffer.from(response.data).toString('utf-8'));
+                console.log('❌ Resposta JSON (erro):', errorData);
+
+                return {
+                    success: false,
+                    error: errorData.message || 'Erro ao gerar boleto',
+                    data: null
+                };
+            } catch (e) {
+                console.log('⚠️ Resposta não é PDF nem JSON válido');
+                return {
+                    success: false,
+                    error: 'Resposta inválida do servidor',
+                    data: null
+                };
+            }
+        }
+
+        // Converter buffer para base64
+        const base64 = Buffer.from(response.data).toString('base64');
+
+        // Verificar se o PDF foi gerado (header PDF: %PDF)
+        const pdfHeader = Buffer.from(response.data).toString('utf-8', 0, 5);
+        if (!pdfHeader.startsWith('%PDF')) {
+            console.log('❌ Dados recebidos não são um PDF válido');
+            return {
+                success: false,
+                error: 'Dados recebidos não são um PDF válido',
+                data: null
+            };
+        }
+
+        console.log('✅ Boleto PDF gerado com sucesso!');
+        console.log('📄 Tamanho:', response.data.length, 'bytes');
+
+        return {
+            success: true,
+            data: {
+                base64: base64,
+                filename: `boleto_${idConta}.pdf`
+            },
+            error: null
+        };
+
+    } catch (error) {
+        console.error('❌ Erro ao gerar boleto PDF:', error.message);
+
+        return {
+            success: false,
+            error: error.message || 'Erro ao gerar boleto',
+            data: null
+        };
+    }
+}
+
+/**
+ * Gera PDF do boleto
+ * @param {number} idConta - ID da conta
+ * @returns {Promise<Object>} Dados do boleto em base64
+ */
+async function geraBoletoData(idConta) {
+    console.log('geraBoletoData:', idConta);
 
     const result = await executeRequest('GET', '/financeiro/boletos', {
         params: { idConta: idConta }
@@ -496,6 +637,7 @@ module.exports = {
     getClienteByCNPJ,
     getBoletosByCNPJ,
     geraBoletoPDF,
+    geraBoletoData,
     testConnection,
     validarBloqueio,
     validarPermissaoFaturamento
