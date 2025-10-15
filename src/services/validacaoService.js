@@ -157,15 +157,20 @@ function normalizarTelefoneApi(telefone) {
  * @returns {string} Telefone no formato CEL (ex: 994931105)
  */
 function normalizarTelefoneERP(telefone) {
-    const telefoneLimpo = telefone.replace(/\D/g, '');
-    let telefoneERP = telefoneLimpo;
+    const telefoneERP = telefone.replace(/\D/g, '');
     console.log('normalizarTelefoneERP: ');
     console.log('telefoneERP: ', telefoneERP);
 
     // Se tem 11 dígitos: DDD + Numero
     if (telefoneERP.length === 11) {
-        console.log('normalizarTelefone: ', telefoneERP);
+        console.log('normalizarTelefone DDD: ', telefoneERP.substring(2));
         return telefoneERP.substring(2);
+    }
+
+    // Se tem 13 dígitos: DDI + DDD + Numero
+    if (telefoneERP.length === 13) {
+        console.log('normalizarTelefone DDI: ', telefoneERP.substring(4));
+        return telefoneERP.substring(4);
     }
 
     // Retorna

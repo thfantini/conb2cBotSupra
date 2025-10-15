@@ -517,16 +517,20 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     
     // Cliente encontrado - validar telefone nos contatos
     const cliente = clienteAPI.data.data[0];
-    
+
     // Remover DDI do telefone para comparação
     const telefoneSemDDI = validacaoService.normalizarTelefoneApi(telefone);
-    
-    // Verificar se telefone está nos contatos
-    const contatosComTelefone = cliente.contatos.filter(c => {
-        if (!c.telefone) return false;
-        const contatoTelLimpo = c.telefone.replace(/\D/g, '');
-        return contatoTelLimpo === telefoneSemDDI;
-    });
+
+    /*
+        // Verificar se telefone está nos contatos
+        const contatosComTelefone = cliente.contatos.filter(c => {
+            if (!c.telefone) return false;
+            const contatoTelLimpo = c.telefone.replace(/\D/g, '');
+            return contatoTelLimpo === telefoneSemDDI;
+        });
+    */
+
+    const contatosComTelefone = endpoint.buscarTelefoneCliente(clienteAPI.data, telefone);
     
     if (contatosComTelefone.length === 0) {
         

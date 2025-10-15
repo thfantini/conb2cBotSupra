@@ -224,6 +224,56 @@ function validarPermissaoFaturamento(clienteData, telefone) {
 */
 
 /**
+ * Verifica se o Telefone existe na lista de contatos do CNPJ
+ * @param {Object} clienteData - Dados do cliente
+ * @param {string} telefone - Número de telefone a validar
+ * @returns {Array} Array de contatos com o telefone correspondente
+ */
+function buscarTelefoneCliente(clienteData, telefone) {
+
+    // Limpa o telefone para comparação (remove caracteres especiais)
+    const validacaoService = require('../services/validacaoService');
+    const telefoneLimpo = validacaoService.normalizarTelefoneERP(telefone);
+    console.log('buscarTelefoneCliente: ', telefone);
+    console.log('telefoneLimpo: ', telefoneLimpo);
+
+    // Busca contatos que possuem telefone correspondente ao número informado
+    const cliente = clienteData.data[0];
+    const contatosComTelefone = cliente.contatos.filter(contato => {
+
+        // Ignora contatos sem Telefone e Celular
+        if (!contato.telefone && !contato.celular) {
+            return false;
+        }
+
+        // Verifica Contato > Telefone
+        let telefoneCorresponde = false;
+        if (contato.telefone) {
+            let contatoTelefoneLimpo = contato.telefone.replace(/\D/g, '');
+            telefoneCorresponde = (contatoTelefoneLimpo === telefoneLimpo);
+        }
+
+        // Verifica Contato > Celular (se telefone não correspondeu)
+        let celularCorresponde = false;
+        if (contato.celular) {
+            let contatoCelularLimpo = contato.celular.replace(/\D/g, '');
+            celularCorresponde = (contatoCelularLimpo === telefoneLimpo);
+        }
+
+        console.log('telefoneCorresponde: ', telefoneCorresponde);
+        console.log('celularCorresponde: ', celularCorresponde);
+
+        // Retorna true se corresponder
+        return telefoneCorresponde || celularCorresponde;
+    });
+
+    console.log('buscarTelefoneCliente - Contatos encontrados:', contatosComTelefone.length);
+    return contatosComTelefone;
+}
+
+
+
+/**
  * Valida se o contato tem permissão para solicitar boletos
  * @param {Object} clienteData - Dados do cliente
  * @param {string} telefone - Número de telefone a validar
@@ -272,31 +322,33 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     //     return contatoCelular === telefoneLimpo;
     // });
 
-    // Busca contatos que possuem telefone correspondente ao número informado
-    const contatosComTelefone = cliente.contatos.filter(contato => {
+    // // Busca contatos que possuem telefone correspondente ao número informado
+    // const contatosComTelefone = cliente.contatos.filter(contato => {
 
-        // Ignora contatos sem Telefone e Celular
-        if (!contato.telefone && !contato.celular) {
-            return false; 
-        }
+    //     // Ignora contatos sem Telefone e Celular
+    //     if (!contato.telefone && !contato.celular) {
+    //         return false; 
+    //     }
         
-        // Verifica Contato > Telefone
-        let telefoneCorresponde = false;
-        if (contato.telefone) {
-            let contatoTelefoneLimpo = contato.telefone.replace(/\D/g, '');
-            telefoneCorresponde = (contatoTelefoneLimpo === telefoneLimpo);
-        }
+    //     // Verifica Contato > Telefone
+    //     let telefoneCorresponde = false;
+    //     if (contato.telefone) {
+    //         let contatoTelefoneLimpo = contato.telefone.replace(/\D/g, '');
+    //         telefoneCorresponde = (contatoTelefoneLimpo === telefoneLimpo);
+    //     }
 
-        // Verifica Contato > Celular (se telefone nao correspondeu)
-        let celularCorresponde = false;
-        if (contato.celular) {
-            let contatoCelularLimpo = contato.celular.replace(/\D/g, '');
-            celularCorresponde = (contatoCelularLimpo === telefoneLimpo);
-        }
+    //     // Verifica Contato > Celular (se telefone nao correspondeu)
+    //     let celularCorresponde = false;
+    //     if (contato.celular) {
+    //         let contatoCelularLimpo = contato.celular.replace(/\D/g, '');
+    //         celularCorresponde = (contatoCelularLimpo === telefoneLimpo);
+    //     }
 
-        // 2. Retorna true se corresponder
-        return telefoneCorresponde || celularCorresponde;
-    });
+    //     // 2. Retorna true se corresponder
+    //     return telefoneCorresponde || celularCorresponde;
+    // });
+
+    const contatosComTelefone = buscarTelefoneCliente(clienteData, telefone);
 
     console.log('- Total de contatos:', cliente.contatos.length);
     console.log('- Contatos com telefone correspondente:', contatosComTelefone.length);
@@ -640,5 +692,6 @@ module.exports = {
     geraBoletoData,
     testConnection,
     validarBloqueio,
-    validarPermissaoFaturamento
+    validarPermissaoFaturamento,
+    buscarTelefoneCliente
 };
