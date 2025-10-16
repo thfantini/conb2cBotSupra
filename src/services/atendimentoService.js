@@ -29,7 +29,8 @@ const MENU_OPCOES = [
 const MENU_OPCOES = [
     '1️⃣ Boletos em Aberto',
     '2️⃣ Informar outro CNPJ',
-    '3️⃣ Falar com Atendente'
+    '3️⃣ Falar com Atendente',
+    '4️⃣ Falar com Suporte'
 ];
 
 /**
@@ -58,7 +59,7 @@ async function enviarMenuPrincipal(phoneNumber) {
  */
 
 async function enviarMenuPrincipalBotao(telefone) {
-    const texto = '📋 *Menu de Atendimento*\n\nComo posso ajudar você hoje?';
+    const texto = '📋 *Menu de Atendimento*\n\nComo posso te ajudar hoje?';
     
     /*const botoes = [
         { id: '1', text: '💰 Boletos em Aberto', type: 'reply' },
@@ -75,10 +76,10 @@ async function enviarMenuPrincipalBotao(telefone) {
  * Verifica se a mensagem contém palavras-chave para transferência de atendente
  * @param {string} mensagem - Mensagem recebida do cliente
  * @returns {boolean} True se contém palavra-chave de atendimento
- */
+
 function verificarPalavrasChaveAtendente(mensagem) {
     const palavrasChave = [
-        'propostas',
+        'suporte',
         'atendente',
         'atendimento',
         'financeiro',
@@ -92,6 +93,7 @@ function verificarPalavrasChaveAtendente(mensagem) {
     const mensagemLower = mensagem.toLowerCase().trim();
     return palavrasChave.some(palavra => mensagemLower.includes(palavra));
 }
+*/
 
 /**
  * Verifica se a mensagem contém palavras-chave para boleto
@@ -118,31 +120,96 @@ function verificarPalavrasChaveBoleto(mensagem) {
 
 
 /**
+ * Verifica se a mensagem contém palavras-chave para Atendimento
+ * @param {string} mensagem - Mensagem recebida do cliente
+ * @returns {string} palavra-chave encontrada ou undefined
+ */
+function verificarPalavrasChaveAtendimento(mensagem) {
+    // Objeto de mapeamento: [Variação digitada] : [Palavra Oficial a Retornar]
+    const mapeamentoChaves = {
+        'atendente': 'atendente',   // Correto
+        'atndente': 'atendente',    // Erro de digitação
+        'atndenti': 'atendente',    // Erro de digitação
+        'atndent': 'atendente',    // Erro de digitação
+        
+        'atendimento': 'atendente', // Correto
+        'atndimento': 'atendente',  // Erro de digitação
+        'atndiment': 'atendente',  // Erro de digitação
+        
+        'humano': 'suporte',
+        'suporte': 'suporte', // Correto
+        'suport': 'suporte',  // Erro de digitação
+        
+        'financeiro': 'atendente', // Correto
+        'financiro': 'atendente',  // Erro de digitação
+        'finaceiro': 'atendente'   // Outro erro comum
+    };
+
+    console.log('verificarPalavrasChaveAtendimento: ', mensagem);
+    const mensagemLower = mensagem.toLowerCase().trim();
+    
+    // 1. Pega todas as variações (chaves) do objeto de mapeamento
+    const variacoes = Object.keys(mapeamentoChaves);
+
+    // 2. Encontra a primeira variação presente na mensagem
+    const variacaoEncontrada = variacoes.find(variacao => mensagemLower.includes(variacao));
+    
+    // 3. Se uma variação foi encontrada, retorna a palavra OFICIAL correspondente
+    if (variacaoEncontrada) {
+        return mapeamentoChaves[variacaoEncontrada];
+    }
+    
+    // 4. Se nada foi encontrado, retorna undefined
+    return undefined;
+}
+
+/**
  * Fluxo principal de atendimento
  */
 async function fluxoAtendimento(telefone, mensagem, messageId) {
     const estado = estadosUsuarios.get(telefone) || { etapa: 'inicial' };
     
-    console.log(`📊 Estado atual: ${estado.etapa}`);
+    console.log(`Estado atual: ${estado.etapa}`);
 
     // Verificação global de comando de saída
     if (verificarComandoSaida(mensagem)) {
         return await processarEncerramentoManual(telefone);
     }
 
-    // Verificação global de palavras-chave para Atendente
-    if (verificarPalavrasChaveAtendente(mensagem)) {
-        const estadosQuePermitemAtendente = [
+    // Verificação global de palavras-chave para Atendimento
+    const buscaAtendimento = verificarPalavrasChaveAtendimento(mensagem);
+    if (buscaAtendimento && estado.cliente) {
+        const estadosQuePermitemAtendimento = [
             'aguardando_novo_cnpj',
             'aguardando_cnpj',
+            'sem_permissao',
+            'consultando_boletos',
             'menu_principal',
+            'inicial',
             'sem_permissao'
         ];
-        
-        if (estadosQuePermitemAtendente.includes(estado.etapa)) {
-            return await processarTransferenciaAtendente(telefone, estado.cliente, messageId);
+
+        console.log(`A mensagem é sobre: ${buscaAtendimento}`);
+        if (estadosQuePermitemAtendimento.includes(estado.etapa)) {
+            return await etapaMenuPrincipal(telefone, buscaAtendimento, messageId, estado);
         }
     }
+
+    /*
+        // Verificação global de palavras-chave para Atendente
+        if (verificarPalavrasChaveAtendente(mensagem)) {
+            const estadosQuePermitemAtendente = [
+                'aguardando_novo_cnpj',
+                'aguardando_cnpj',
+                'menu_principal',
+                'sem_permissao'
+            ];
+            
+            if (estadosQuePermitemAtendente.includes(estado.etapa)) {
+                return await processarTransferenciaAtendente(telefone, estado.cliente, messageId);
+            }
+        }
+    */
 
     // Verificação global de palavras-chave para Boleto > Somente autorizado
     const buscaBoleto = verificarPalavrasChaveBoleto(mensagem);
@@ -157,7 +224,8 @@ async function fluxoAtendimento(telefone, mensagem, messageId) {
             return await etapaMenuPrincipal(telefone, 'boletos', messageId, estado);
         }
     }
-    
+
+    //Menu Principal    
     switch (estado.etapa) {
         case 'inicial':
             return await etapaInicial(telefone, mensagem, messageId);
@@ -183,7 +251,7 @@ async function fluxoAtendimento(telefone, mensagem, messageId) {
  * Etapa 1: Verificação inicial
  */
 async function etapaInicial(telefone, mensagem, messageId) {
-    console.log('🔍 Etapa: Verificação Inicial');
+    console.log('Etapa: Verificação Inicial');
     
     // Buscar cliente por telefone
     const clienteAPI = await endpoint.getClienteByCelular(telefone);
@@ -253,17 +321,28 @@ async function etapaInicial(telefone, mensagem, messageId) {
     // Verificar se mensagem inicial contém palavra-chave de boleto
     const buscaBoleto = verificarPalavrasChaveBoleto(mensagem);
     if (buscaBoleto) {
-        console.log(`🎯 Palavra-chave detectada na mensagem inicial: ${buscaBoleto}`);
-        console.log('🚀 Executando consulta de boletos automaticamente...');
+        console.log(`Palavra-chave detectada na mensagem inicial: ${buscaBoleto}`);
+        console.log('Executando consulta de boletos automaticamente...');
 
         // Executar consulta de boletos diretamente
         return await processarOpcaoBoletos(telefone, cliente, messageId);
     }
+    
+    // Verificar se mensagem inicial contém palavra-chave de atendimento
+    const buscaAtendente = verificarPalavrasChaveAtendimento(mensagem);
+    if (buscaAtendente) {
+        console.log(`Palavra-chave detectada na mensagem inicial: ${buscaAtendente}`);
+        console.log('Executando transferencia automaticamente...');
+
+        // Executar consulta transferencia diretamente
+        return await etapaMenuPrincipal(telefone, buscaAtendente, messageId, 'menu_principal');
+    }
 
     // Se não houver palavra-chave, exibir menu principal
+    // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        'Como posso ajudar você hoje?'
+        'Como posso te ajudar hoje?'
     );
 
     await enviarMenuPrincipal(telefone);
@@ -275,7 +354,7 @@ async function etapaInicial(telefone, mensagem, messageId) {
  * Etapa 2: Validar CNPJ informado
  */
 async function etapaValidarCNPJ(telefone, cnpj, messageId) {
-    console.log('🔍 Etapa: Validar CNPJ');
+    console.log('Etapa: Validar CNPJ');
 
     const resultado = await processarOpcaoCNPJ(telefone, cnpj, messageId);
 
@@ -295,17 +374,18 @@ async function etapaValidarCNPJ(telefone, cnpj, messageId) {
         // Verificar se mensagem contém palavra-chave de boleto
         const buscaBoleto = verificarPalavrasChaveBoleto(mensagemInicial);
         if (buscaBoleto) {
-            console.log(`🎯 Palavra-chave detectada após validação CNPJ: ${buscaBoleto}`);
-            console.log('🚀 Executando consulta de boletos automaticamente...');
+            console.log(`Palavra-chave detectada após validação CNPJ: ${buscaBoleto}`);
+            console.log('Executando consulta de boletos automaticamente...');
 
             // Executar consulta de boletos diretamente
             return await processarOpcaoBoletos(telefone, resultado.cliente, messageId);
         }
 
         // Se não houver palavra-chave, exibir menu principal
+        // TODO: Criar funcao em: mensagens.js
         await evolutionAPI.sendTextMessage(
             telefone,
-            'Como posso ajudar você hoje?'
+            'Como posso te ajudar hoje?'
         );
 
         await enviarMenuPrincipal(telefone);
@@ -321,7 +401,7 @@ async function etapaValidarCNPJ(telefone, cnpj, messageId) {
  * Etapa 3: Processar opção do menu
  */
 async function etapaMenuPrincipal(telefone, opcao, messageId, estado) {
-    console.log('🔍 Etapa: Menu Principal - Opção:', opcao);
+    console.log('Etapa: Menu Principal - Opção:', opcao);
     
     const { cliente, contato } = estado;
     
@@ -340,15 +420,23 @@ async function etapaMenuPrincipal(telefone, opcao, messageId, estado) {
 
         case '2':
         case 'alterar':
+        case 'cnpj':
         case 'trocar':
             return await processarAlteraCNPJ(telefone, messageId, estado);
 
+        /*
         case '3':
         case 'certificados':
             return await processarOpcaoCertificados(telefone, cliente, messageId);
-            
-        case '4':
+        */
+
+        case '3':
+        case 'atendente':
             return await processarTransferenciaAtendente(telefone, cliente, messageId);
+
+        case '4':
+        case 'suporte':
+            return await processarTransferenciaSuporte(telefone, cliente, messageId);
 
         case 'menu':
             await enviarMenuPrincipal(telefone);
@@ -379,7 +467,7 @@ async function processarAlteraCNPJ(telefone, messageId, estado) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        '🏢 *Alterar CNPJ*\n\n' +
+        '📄 *Alterar CNPJ*\n\n' +
         'Por favor, informe o novo CNPJ da sua empresa:\n\n' +
         '_(Digite apenas os números)_'
     );
@@ -403,7 +491,7 @@ async function processarAlteraCNPJ(telefone, messageId, estado) {
  * @returns {Promise<Object>} Resultado da validação
  */
 async function processarNovoCNPJ(telefone, cnpj, messageId) {
-    console.log('🔍 Validando novo CNPJ:', cnpj);
+    console.log('Validando novo CNPJ:', cnpj);
     
     // Usar a mesma função de validação existente
     //const resultado = await validarCNPJ(telefone, cnpj, messageId);
@@ -438,7 +526,7 @@ async function processarNovoCNPJ(telefone, cnpj, messageId) {
  * @returns {Promise<Object>} Resultado da validação
  */
 async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
-    console.log('🔍 Validando CNPJ:', cnpj);
+    console.log('Validando CNPJ:', cnpj);
     
     // Limpar CNPJ
     const cnpjLimpo = cnpj.replace(/\D/g, '');
@@ -519,7 +607,7 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     const cliente = clienteAPI.data.data[0];
 
     // Remover DDI do telefone para comparação
-    const telefoneSemDDI = validacaoService.normalizarTelefoneApi(telefone);
+    // const telefoneSemDDI = validacaoService.normalizarTelefoneApi(telefone);
 
     /*
         // Verificar se telefone está nos contatos
@@ -610,12 +698,12 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
  * Processar opção: Boletos
  */
 async function processarOpcaoBoletos(telefone, cliente, messageId) {
-    console.log('💰 Processando: Boletos');
+    console.log('Processando: Boletos');
     
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        'Estou consultando os seus boletos em aberto...'
+        '🔍 Certo! estou consultando os seus boletos ...'
     );
     
     // Recupera Dados do cliente
@@ -633,7 +721,7 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
         await evolutionAPI.sendTextMessage(
             telefone,
             '✅ Você não possui boletos em aberto no momento.\n\n' +
-            'Posso ajudar com algo mais?'
+            'Posso te ajudar com algo mais?'
         );
         
         //await whatsappService.mostrarMenuPrincipal(telefone);
@@ -645,6 +733,13 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     //boleto.linhaDigitavel: nao existe, mock: boleto.idConta boleto.numeroDocumento
     //boleto.url: nao existe, link mock para testes
     const boletoLink = `https://boleto.suprasoft.net/?idConta=`;
+
+    // TODO: Criar funcao em: mensagens.js
+    await evolutionAPI.sendTextMessage(
+        telefone,
+        //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
+        `Encontrei *${boletos.data.length}* boleto(s).`
+    );
     
     // Enviar cada boleto
     let linhaDigitavelBoleto = '';
@@ -683,8 +778,8 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     await evolutionAPI.sendTextMessage(
         telefone,
         //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
-        `Encontrei *${boletos.data.length}* boleto(s).\n\n` +
-        'Posso ajudar com algo mais?'
+        //`Encontrei *${boletos.data.length}* boleto(s).\n\n` +
+        'Posso te ajudar com algo mais?'
     );
     
     //await whatsappService.mostrarMenuPrincipal(telefone);
@@ -699,7 +794,7 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
  */
 
 async function enviarBoletoPDF(telefone, idConta, numeroDocumento) {
-    console.log('📄 Gerando PDF do boleto:', idConta);
+    console.log('Gerando PDF do boleto:', idConta);
     
     // Gerar PDF
     const boletoPDF = await endpoint.geraBoletoPDF(idConta);
@@ -864,7 +959,7 @@ function verificarComandoSaida(mensagem) {
  * @returns {Promise<boolean>} True se cliente não está bloqueado
  */
 async function verificarBloqueioAntesDeAcao(telefone, cnpj) {
-    console.log('🔍 Verificando bloqueio antes de ação...');
+    console.log('Verificando bloqueio antes de ação...');
     
     // Sempre verificar status antes de ações críticas
     const clienteAPI = await endpoint.getClienteByCNPJ(cnpj);
@@ -879,7 +974,7 @@ async function verificarBloqueioAntesDeAcao(telefone, cnpj) {
         // Limpar estado
         estadosUsuarios.delete(telefone);
         
-        console.log('🚫 Cliente foi bloqueado durante o atendimento');
+        console.log('Cliente foi bloqueado durante o atendimento');
         return false;
     }
     
@@ -892,7 +987,7 @@ async function verificarBloqueioAntesDeAcao(telefone, cnpj) {
  * @param {string} telefone - Número do telefone
  */
 function limparSessao(telefone) {
-    console.log(`🧹 Limpando sessão: ${telefone}`);
+    console.log(`Limpando sessão: ${telefone}`);
     estadosUsuarios.delete(telefone);
 }
 
@@ -919,7 +1014,7 @@ function definirEstado(telefone, estado) {
  * Processa outras opções do menu
  */
 async function processarOpcaoNFE(telefone, cliente, messageId) {
-    console.log('📄 Processando: NFE');
+    console.log('Processando: NFE');
     
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
@@ -943,7 +1038,7 @@ async function processarOpcaoNFE(telefone, cliente, messageId) {
 }
 
 async function processarOpcaoCertificados(telefone, cliente, messageId) {
-    console.log('📜 Processando: Certificados');
+    console.log('Processando: Certificados');
     
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
@@ -967,14 +1062,34 @@ async function processarOpcaoCertificados(telefone, cliente, messageId) {
 }
 
 async function processarTransferenciaAtendente(telefone, cliente, messageId) {
-    console.log('👤 Processando: Transferência para Atendente');
+    console.log('Processando: Transferência para Atendente');
     
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        '👨‍💼 *Transferindo para Atendimento*\n\n' +
-        'Sua solicitação será direcionada para um de nossos atendentes.\n' +
-        'Aguarde que em breve alguém entrará em contato com você.'
+        '👨‍💼 *Transferindo Atendimento*\n\n' +
+        'Estou direcionando sua mensagem para o nosso setor administrativo.\n' +
+        'Em breve, alguém do time entrará em contato por aqui para te ajudar.\n\n' +
+        'Nosso horário de atendimento:\n*Segunda à Sexta-feira*,\n*de 08hs às 17hs*'
+    );
+    
+    // TODO: Implementar transferência real
+    limparSessao(telefone);
+    
+    return { status: 'transferido_atendente' };
+}
+
+async function processarTransferenciaSuporte(telefone, cliente, messageId) {
+    console.log('Processando: Transferência para Suporte');
+    
+    // TODO: Criar funcao em: mensagens.js
+    await evolutionAPI.sendTextMessage(
+        telefone,
+        '👨‍💼 *Falar com Suporte*\n\n' +
+        'Para falar com o nosso Suporte, entre em contato pelo número:\n' +
+        `${process.env.API_PHONE}\n\n` +
+        'Este canal é exclusivo para emissão e envio de boletos.\n\n' +
+        'Nossa equipe irá atendê-lo(a) com excelência nesse número.'
     );
     
     // TODO: Implementar transferência real

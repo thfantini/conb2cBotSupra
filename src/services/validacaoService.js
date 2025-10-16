@@ -161,13 +161,25 @@ function normalizarTelefoneERP(telefone) {
     console.log('normalizarTelefoneERP: ');
     console.log('telefoneERP: ', telefoneERP);
 
-    // Se tem 11 dígitos: DDD + Numero
+    // Se tem 10 dígitos: DDD + Numero (sem 9)
+    if (telefoneERP.length === 10) {
+        console.log('normalizarTelefone DDD: ', telefoneERP.substring(2));
+        return  '9' + telefoneERP.substring(2);
+    }
+
+    // Se tem 11 dígitos: DDD + 9 + Numero
     if (telefoneERP.length === 11) {
         console.log('normalizarTelefone DDD: ', telefoneERP.substring(2));
         return telefoneERP.substring(2);
     }
 
-    // Se tem 13 dígitos: DDI + DDD + Numero
+    // Se tem 12 dígitos: DDI + DDD + Numero (sem 9)
+    if (telefoneERP.length === 12) {
+        console.log('normalizarTelefone DDI-DDD: ', telefoneERP.substring(2));
+        return '9' + telefoneERP.substring(4);
+    }
+
+    // Se tem 13 dígitos: DDI + DDD + 9 + Numero
     if (telefoneERP.length === 13) {
         console.log('normalizarTelefone DDI: ', telefoneERP.substring(4));
         return telefoneERP.substring(4);

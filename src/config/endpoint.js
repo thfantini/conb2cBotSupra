@@ -298,11 +298,13 @@ function validarPermissaoFaturamento(clienteData, telefone) {
         };
     }
 
-    // Limpa o telefone para comparação (remove caracteres especiais)
-    // const telefoneLimpo = telefone.replace(/\D/g, '');
-    const validacaoService = require('../services/validacaoService');
-    const telefoneLimpo = validacaoService.normalizarTelefoneERP(telefone);
-    console.log('telefoneLimpo: ', telefoneLimpo);
+    /*
+        // Limpa o telefone para comparação (remove caracteres especiais)
+        // const telefoneLimpo = telefone.replace(/\D/g, '');
+        const validacaoService = require('../services/validacaoService');
+        const telefoneLimpo = validacaoService.normalizarTelefoneERP(telefone);
+        console.log('telefoneLimpo: ', telefoneLimpo);
+    */
 
     // // Busca contatos que possuem telefone correspondente ao número informado
     // const contatosComTelefone = cliente.contatos.filter(contato => {
