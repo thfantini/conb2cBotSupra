@@ -462,6 +462,12 @@ async function getClienteByCNPJ(cpfCnpj) {
         return result;
     }
 
+    //Sem Resultados
+    if (!result.data.data) {
+        console.log('getClienteByCNPJ SEM DATA!: ', cpfCnpj)
+        return result;
+    }
+
     // Validação de bloqueio
     const bloqueioStatus = validarBloqueio(result.data);
     if (bloqueioStatus.blocked) {
@@ -511,6 +517,11 @@ async function getBoletosByCNPJ(idParceiro) {
     });
 
     if (!result.success) {
+        return result;
+    }
+
+    //Sem Resultados
+    if (!result.data.data) {
         return result;
     }
 

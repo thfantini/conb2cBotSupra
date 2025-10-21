@@ -281,11 +281,22 @@ async function etapaInicial(telefone, mensagem, messageId) {
     // Cliente não encontrado
     // TODO: Criar funcao em: mensagens.js
     if (!clienteAPI.success) {
+        
+        /*
+            //Boa vindas Padrao
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                '👋 Olá! Bem-vindo ao nosso atendimento.\n\n' +
+                'Para continuar, por favor, informe seu *CNPJ*:'
+            );
+        */
+
         await evolutionAPI.sendTextMessage(
             telefone,
-            '👋 Olá! Bem-vindo ao nosso atendimento.\n\n' +
+            'Olá! Bem-vindo ao nosso atendimento.\n\n' +
             'Para continuar, por favor, informe seu *CNPJ*:'
         );
+
 
         // Armazenar mensagem inicial para verificar palavra-chave após validação
         estadosUsuarios.set(telefone, {
@@ -303,11 +314,12 @@ async function etapaInicial(telefone, mensagem, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        `👋 Olá, ${contato.nome}!\n\n` +
+        //`👋 Olá, ${contato.nome}!\n\n` +
+        `Olá, ${contato.nome}!\n\n` +
         `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
-        `Empresa: *${cliente.nome}*\n` +
-        `CNPJ: ${cliente.cpfCnpj}\n\n` +
-        `Bem-vindo(a) ao nosso atendimento.`
+        `Empresa: ${cliente.nome}\n` +
+        `CNPJ: ${cliente.cpfCnpj}\n\n`
+        //`Bem-vindo(a) ao nosso atendimento.`
     );
 
     // Atualizar estado com cliente autorizado
@@ -467,7 +479,8 @@ async function processarAlteraCNPJ(telefone, messageId, estado) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        '📄 *Alterar CNPJ*\n\n' +
+        //'📄 *Alterar CNPJ*\n\n' +
+        '*Alterar CNPJ*\n\n' +
         'Por favor, informe o novo CNPJ da sua empresa:\n\n' +
         '_(Digite apenas os números)_'
     );
@@ -559,8 +572,10 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     console.log(clienteAPI);
     
     // CNPJ não encontrado
-    if (!clienteAPI.success) {
+    if (!clienteAPI.success || !clienteAPI.data.data[0]) {
         
+        console.log('CNPJ Não Encontrado!!!!');
+
         // TODO: Criar funcao em: mensagens.js
         await evolutionAPI.sendTextMessage(
             telefone,
@@ -662,11 +677,11 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        `👋 Olá, ${contatoAutorizado.nome}!\n\n` +
+        `Olá, ${contatoAutorizado.nome}!\n\n` +
         `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
-        `Empresa: *${cliente.nome}*\n` +
-        `CNPJ: ${cnpjFormatado}\n\n` +
-        'Bem-vindo(a) ao nosso atendimento.'
+        `Empresa: ${cliente.nome}\n` +
+        `CNPJ: ${cnpjFormatado}\n\n`
+        //'Bem-vindo(a) ao nosso atendimento.'
     );
 
     // Registrar atendimento iniciado
@@ -703,7 +718,8 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     // TODO: Criar funcao em: mensagens.js
     await evolutionAPI.sendTextMessage(
         telefone,
-        '🔍 Certo! estou consultando os seus boletos ...'
+        //'🔍 Certo! estou consultando os seus boletos ...'
+        'Certo! estou consultando os seus boletos ...'
     );
     
     // Recupera Dados do cliente
@@ -720,7 +736,8 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
         // TODO: Criar funcao em: mensagens.js
         await evolutionAPI.sendTextMessage(
             telefone,
-            '✅ Você não possui boletos em aberto no momento.\n\n' +
+            //'✅ Você não possui boletos em aberto no momento.\n\n' +
+            'Você não possui boletos em aberto no momento.\n\n' +
             'Posso te ajudar com algo mais?'
         );
         
@@ -747,16 +764,22 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
         
         //Verifica Linha Digitavel
         if(boleto.linhaDigitavelBoleto){
-            linhaDigitavelBoleto = `*Linha Digitável:*\n${boleto.linhaDigitavelBoleto}\n`;
+            //linhaDigitavelBoleto = `*Linha Digitável:*\n${boleto.linhaDigitavelBoleto}\n`;
+            //linhaDigitavelBoleto = `${boleto.linhaDigitavelBoleto}`;
+            linhaDigitavelBoleto = `*Segue linha digitável:*\n`;
         }
+        
         
         // TODO: Criar funcao em: mensagens.js
         const mensagem = 
-            `📄 *Boleto: ${boleto.numeroDocumento}*\n\n` +
+            //`📄 *Boleto: ${boleto.numeroDocumento}*\n\n` +
+            `*Boleto: ${boleto.numeroDocumento}*\n` +
             //`📅 Vencimento: ${formatarData(boleto.dataVencimento)}\n` +
             //`💰 Valor: R$ ${boleto.valor.toFixed(2)}\n\n${linhaDigitavelBoleto}` +
-            `Vencimento: ${formatarDataERP(boleto.dataVencimento)}\n` +
-            `Valor: R$ ${boleto.valor.toFixed(2)}\n${linhaDigitavelBoleto}` ;
+            `*Vencimento:* ${formatarDataERP(boleto.dataVencimento)}\n` +
+            //`Valor: R$ ${boleto.valor.toFixed(2)}\n${linhaDigitavelBoleto}\n` + 
+            `*Valor:* R$ ${boleto.valor.toFixed(2)} (até o vencimento) \n` + 
+            `${linhaDigitavelBoleto}`;
             //`*Linha Digitável:*\n${boleto.idConta}${boleto.numeroDocumento}\n\n` +
             //`*Link:*\n${boletoLink}${boleto.idConta}&${boleto.numeroDocumento}`;
             //`\n`;
@@ -765,6 +788,12 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
         
         // Aguardar 1 segundo entre envios
         await new Promise(resolve => setTimeout(resolve, 1000));
+
+        //Envia Linha Digitavel
+        if(boleto.linhaDigitavelBoleto){
+            await evolutionAPI.sendTextMessage(telefone, boleto.linhaDigitavelBoleto);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
 
         // Envia Boleto PDF
         await enviarBoletoPDF(telefone, boleto.idConta, boleto.numeroDocumento);
