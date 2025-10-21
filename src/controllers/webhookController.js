@@ -29,27 +29,38 @@ async function receberMensagem(req, res) {
     try {
         console.log('📨 [WEBHOOK] Webhook recebido');
         console.log('📨 [WEBHOOK] Body:', JSON.stringify(req.body, null, 2));
-        
+
         const webhookData = req.body;
-        
-        // Validar estrutura do webhook
-        if (!webhookData || !webhookData.data) {
+
+        // Detectar formato do webhook (Evolution 2.3.6 vs versões anteriores)
+        let mensagens = [];
+
+        // Formato Evolution 2.3.6: { event, instance, data: { key, message, ... }, destination, ... }
+        if (webhookData.event === 'messages.upsert' && webhookData.data && webhookData.data.key) {
+            console.log('📌 [WEBHOOK] Formato detectado: Evolution API 2.3.6');
+            mensagens = [webhookData.data];
+        }
+        // Formato anterior: { data: [ { key, message } ] } ou { data: { key, message } }
+        else if (webhookData.data) {
+            console.log('📌 [WEBHOOK] Formato detectado: Evolution API versão anterior');
+            mensagens = Array.isArray(webhookData.data)
+                ? webhookData.data
+                : [webhookData.data];
+        }
+        // Estrutura inválida
+        else {
             console.log('⚠️ [WEBHOOK] Estrutura inválida');
+            console.log('⚠️ [WEBHOOK] Body recebido:', JSON.stringify(webhookData, null, 2));
             return res.status(400).json({
                 success: false,
                 error: 'Estrutura de webhook inválida'
             });
         }
-        
-        // Processar mensagens (pode vir em lote)
-        const mensagens = Array.isArray(webhookData.data) 
-            ? webhookData.data 
-            : [webhookData.data];
-        
+
         console.log(`📊 [WEBHOOK] Total de mensagens: ${mensagens.length}`);
-        
+
         const resultados = [];
-        
+
         for (const mensagem of mensagens) {
             try {
                 const resultado = await processarMensagemWebhook(mensagem);
@@ -62,16 +73,16 @@ async function receberMensagem(req, res) {
                 });
             }
         }
-        
+
         mensagensProcessadas += mensagens.length;
-        
+
         // Responder rapidamente ao webhook
         res.status(200).json({
             success: true,
             processadas: mensagens.length,
             resultados: resultados
         });
-        
+
     } catch (error) {
         console.error('❌ [WEBHOOK] Erro fatal:', error);
         res.status(500).json({
