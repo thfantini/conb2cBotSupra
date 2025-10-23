@@ -479,22 +479,43 @@ async function testConnection() {
 /**
  * Formata número para padrão brasileiro
  * @param {string} phoneNumber - Número a ser formatado
- * @returns {string} Número formatado
+ * @returns {string} Número formatado (13 dígitos: 55 + DDD + 9 + número)
  */
 function formatPhoneNumber(phoneNumber) {
     // Remove caracteres não numéricos
     let cleaned = phoneNumber.replace(/\D/g, '');
-    
-    // Adiciona código do país se não existir
-    if (!cleaned.startsWith('55')) {
-        cleaned = '55' + cleaned;
+
+    // Cenário 1: 10 dígitos (DDD + 8 dígitos sem 9)
+    // Ex: 3199999999 → 5531999999999
+    if (cleaned.length === 10) {
+        cleaned = '55' + cleaned.substring(0, 2) + '9' + cleaned.substring(2);
     }
-    
-    // Adiciona 9 no celular se necessário (padrão brasileiro)
-    if (cleaned.length === 12 && cleaned.substring(4, 5) !== '9') {
-        cleaned = cleaned.substring(0, 4) + '9' + cleaned.substring(4);
+    // Cenário 2: 11 dígitos (DDD + 9 + 8 dígitos)
+    // Ex: 31999999999 → 5531999999999
+    else if (cleaned.length === 11) {
+        if (!cleaned.startsWith('55')) {
+            cleaned = '55' + cleaned;
+        }
     }
-    
+    // Cenário 3: 12 dígitos (55 + DDD + 8 dígitos sem 9)
+    // Ex: 553199999999 → 5531999999999
+    else if (cleaned.length === 12) {
+        if (cleaned.startsWith('55') && cleaned.substring(4, 5) !== '9') {
+            cleaned = cleaned.substring(0, 4) + '9' + cleaned.substring(4);
+        }
+    }
+    // Cenário 4: 13 dígitos (já completo)
+    // Ex: 5531999999999 → 5531999999999
+    else if (cleaned.length === 13) {
+        // Já está no formato correto
+    }
+    // Cenário 5: outros tamanhos, tentar adicionar 55 se não tiver
+    else {
+        if (!cleaned.startsWith('55')) {
+            cleaned = '55' + cleaned;
+        }
+    }
+
     return cleaned;
 }
 

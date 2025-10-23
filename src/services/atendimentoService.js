@@ -1,6 +1,7 @@
 const endpoint = require('../config/endpoint');
 const database = require('../config/database');
 const evolutionAPI = require('../config/evolution');
+const messageService = require('../config/messageService');
 const validacaoService = require('./validacaoService');
 const MENSAGENS = require('../utils/mensagens');
 
@@ -49,7 +50,8 @@ async function enviarMenuPrincipal(phoneNumber) {
         MENU_OPCOES.join('\n\n');
     
     //await whatsappService.enviarMensagem(phoneNumber, mensagem);
-    await evolutionAPI.sendTextMessage(phoneNumber, mensagem);
+    //await evolutionAPI.sendTextMessage(phoneNumber, mensagem);
+    await messageService.sendTextMessage(phoneNumber, mensagem);
     await whatsappService.adicionarMensagemConversa(phoneNumber, null, 'bot', mensagem);
 }
 
@@ -259,24 +261,27 @@ async function etapaInicial(telefone, mensagem, messageId) {
     // Cliente bloqueado
     // TODO: Criar funcao em: mensagens.js
     if (clienteAPI.blocked) {
-        await evolutionAPI.sendTextMessage(telefone, clienteAPI.error);
+        //await evolutionAPI.sendTextMessage(telefone, clienteAPI.error);
+        await messageService.sendTextMessage(telefone, clienteAPI.error);
         estadosUsuarios.set(telefone, { etapa: 'bloqueado' });
         return { status: 'bloqueado' };
     }
     
-    // Sem permissão
-    if (clienteAPI.success && !clienteAPI.hasPermission) {
-        await evolutionAPI.sendButtonMessage(
-            telefone,
-            clienteAPI.error,
-            [
-                { id: 'atendente', title: '👤 Falar com Atendente' },
-                { id: 'cancelar', title: '❌ Cancelar' }
-            ]
-        );
-        estadosUsuarios.set(telefone, { etapa: 'sem_permissao' });
-        return { status: 'sem_permissao' };
-    }
+    /*
+        // Sem permissão > DESATIVADO
+        if (clienteAPI.success && !clienteAPI.hasPermission) {
+            await evolutionAPI.sendButtonMessage(
+                telefone,
+                clienteAPI.error,
+                [
+                    { id: 'atendente', title: '👤 Falar com Atendente' },
+                    { id: 'cancelar', title: '❌ Cancelar' }
+                ]
+            );
+            estadosUsuarios.set(telefone, { etapa: 'sem_permissao' });
+            return { status: 'sem_permissao' };
+        }
+    */
     
     // Cliente não encontrado
     // TODO: Criar funcao em: mensagens.js
@@ -291,7 +296,16 @@ async function etapaInicial(telefone, mensagem, messageId) {
             );
         */
 
-        await evolutionAPI.sendTextMessage(
+        /*
+            //API Evolution WhatsApp
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                'Olá! Bem-vindo ao nosso atendimento.\n\n' +
+                'Para continuar, por favor, informe seu *CNPJ*:'
+            );
+        */
+
+        await messageService.sendTextMessage(
             telefone,
             'Olá! Bem-vindo ao nosso atendimento.\n\n' +
             'Para continuar, por favor, informe seu *CNPJ*:'
@@ -311,8 +325,21 @@ async function etapaInicial(telefone, mensagem, messageId) {
     const cliente = clienteAPI.data.data[0];
     const contato = clienteAPI.contato;
 
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            //`👋 Olá, ${contato.nome}!\n\n` +
+            `Olá, ${contato.nome}!\n\n` +
+            `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
+            `Empresa: ${cliente.nome}\n` +
+            `CNPJ: ${cliente.cpfCnpj}\n\n`
+            //`Bem-vindo(a) ao nosso atendimento.`
+        );
+    */
+
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         //`👋 Olá, ${contato.nome}!\n\n` +
         `Olá, ${contato.nome}!\n\n` +
@@ -350,9 +377,18 @@ async function etapaInicial(telefone, mensagem, messageId) {
         return await etapaMenuPrincipal(telefone, buscaAtendente, messageId, 'menu_principal');
     }
 
+    /*
+        // Se não houver palavra-chave, exibir menu principal
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            'Como posso te ajudar hoje?'
+        );
+    */
+
     // Se não houver palavra-chave, exibir menu principal
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         'Como posso te ajudar hoje?'
     );
@@ -393,9 +429,18 @@ async function etapaValidarCNPJ(telefone, cnpj, messageId) {
             return await processarOpcaoBoletos(telefone, resultado.cliente, messageId);
         }
 
+        /*
+            // Se não houver palavra-chave, exibir menu principal
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                'Como posso te ajudar hoje?'
+            );
+        */
+
         // Se não houver palavra-chave, exibir menu principal
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             'Como posso te ajudar hoje?'
         );
@@ -454,8 +499,17 @@ async function etapaMenuPrincipal(telefone, opcao, messageId, estado) {
             await enviarMenuPrincipal(telefone);
 
         default:
+            
+            /*
+                // TODO: Criar funcao em: mensagens.js
+                await evolutionAPI.sendTextMessage(
+                    telefone,
+                    '❌ Opção inválida. Por favor, escolha uma opção do menu.'
+                );
+            */
+
             // TODO: Criar funcao em: mensagens.js
-            await evolutionAPI.sendTextMessage(
+            await messageService.sendTextMessage(
                 telefone,
                 '❌ Opção inválida. Por favor, escolha uma opção do menu.'
             );
@@ -476,8 +530,19 @@ async function etapaMenuPrincipal(telefone, opcao, messageId, estado) {
 async function processarAlteraCNPJ(telefone, messageId, estado) {
     console.log('🔄 Processando: Alterar CNPJ');
     
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            //'📄 *Alterar CNPJ*\n\n' +
+            '*Alterar CNPJ*\n\n' +
+            'Por favor, informe o novo CNPJ da sua empresa:\n\n' +
+            '_(Digite apenas os números)_'
+        );
+    */
+
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         //'📄 *Alterar CNPJ*\n\n' +
         '*Alterar CNPJ*\n\n' +
@@ -547,8 +612,18 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     // Validar formato
     if (!validacaoService.validarFormatoCNPJ(cnpjLimpo)) {
         
+        /*
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                '❌ *CNPJ Inválido*\n\n' +
+                'O CNPJ informado não é válido.\n\n' +
+                'Por favor, verifique e informe novamente.'
+            );
+        */
+
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             '❌ *CNPJ Inválido*\n\n' +
             'O CNPJ informado não é válido.\n\n' +
@@ -576,8 +651,19 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
         
         console.log('CNPJ Não Encontrado!!!!');
 
+        /*
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                '❌ *CNPJ Não Encontrado*\n\n' +
+                'Não encontramos este CNPJ em nossa base de dados.\n\n' +
+                'Por favor, verifique o número e tente novamente ou ' +
+                'entre em contato com nosso atendimento.'
+            );
+        */
+
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             '❌ *CNPJ Não Encontrado*\n\n' +
             'Não encontramos este CNPJ em nossa base de dados.\n\n' +
@@ -593,7 +679,8 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     
     // Cliente bloqueado
     if (clienteAPI.blocked) {
-        await evolutionAPI.sendTextMessage(telefone, clienteAPI.error);
+        //await evolutionAPI.sendTextMessage(telefone, clienteAPI.error);
+        await messageService.sendTextMessage(telefone, clienteAPI.error);
         
         // Registrar tentativa bloqueada
         await database.registrarAtendimento({
@@ -637,8 +724,19 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     
     if (contatosComTelefone.length === 0) {
         
+        /*
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                `⚠️ *Telefone Não Cadastrado*\n\n` +
+                `Seu telefone não está cadastrado para o CNPJ: *${cnpjFormatado}*\n\n` +
+                'Por favor, entre em contato com nosso atendimento para atualizar seu cadastro.\n\n' +
+                'Deseja falar com um atendente?'
+            );
+        */
+        
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             `⚠️ *Telefone Não Cadastrado*\n\n` +
             `Seu telefone não está cadastrado para o CNPJ: *${cnpjFormatado}*\n\n` +
@@ -659,8 +757,18 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
     
     if (!contatoAutorizado) {
         
+        /*
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                '⚠️ *Sem Permissão*\n\n' +
+                'Seu cadastro não possui permissão para solicitar boletos.\n\n' +
+                'Deseja ser transferido para atendimento humano?'
+            );
+        */
+
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             '⚠️ *Sem Permissão*\n\n' +
             'Seu cadastro não possui permissão para solicitar boletos.\n\n' +
@@ -673,9 +781,22 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
         };
     }
     
+    /*
+        // Cliente válido e autorizado
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            `Olá, ${contatoAutorizado.nome}!\n\n` +
+            `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
+            `Empresa: ${cliente.nome}\n` +
+            `CNPJ: ${cnpjFormatado}\n\n`
+            //'Bem-vindo(a) ao nosso atendimento.'
+        );
+    */
+
     // Cliente válido e autorizado
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         `Olá, ${contatoAutorizado.nome}!\n\n` +
         `Identifiquei seu telefone associado a seguinte empresa:\n\n` +
@@ -715,8 +836,17 @@ async function processarOpcaoCNPJ(telefone, cnpj, messageId) {
 async function processarOpcaoBoletos(telefone, cliente, messageId) {
     console.log('Processando: Boletos');
     
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            //'🔍 Certo! estou consultando os seus boletos ...'
+            'Certo! estou consultando os seus boletos ...'
+        );
+    */
+
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         //'🔍 Certo! estou consultando os seus boletos ...'
         'Certo! estou consultando os seus boletos ...'
@@ -733,8 +863,18 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     
     if (!boletos.success || boletos.data.length === 0) {
         
+        /*
+            // TODO: Criar funcao em: mensagens.js
+            await evolutionAPI.sendTextMessage(
+                telefone,
+                //'✅ Você não possui boletos em aberto no momento.\n\n' +
+                'Você não possui boletos em aberto no momento.\n\n' +
+                'Posso te ajudar com algo mais?'
+            );
+        */
+
         // TODO: Criar funcao em: mensagens.js
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             //'✅ Você não possui boletos em aberto no momento.\n\n' +
             'Você não possui boletos em aberto no momento.\n\n' +
@@ -751,8 +891,17 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
     //boleto.url: nao existe, link mock para testes
     const boletoLink = `https://boleto.suprasoft.net/?idConta=`;
 
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
+            `Encontrei *${boletos.data.length}* boleto(s).`
+        );
+    */
+
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
         `Encontrei *${boletos.data.length}* boleto(s).`
@@ -784,14 +933,16 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
             //`*Link:*\n${boletoLink}${boleto.idConta}&${boleto.numeroDocumento}`;
             //`\n`;
         
-        await evolutionAPI.sendTextMessage(telefone, mensagem);
+        //await evolutionAPI.sendTextMessage(telefone, mensagem);
+        await messageService.sendTextMessage(telefone, mensagem);
         
         // Aguardar 1 segundo entre envios
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         //Envia Linha Digitavel
         if(boleto.linhaDigitavelBoleto){
-            await evolutionAPI.sendTextMessage(telefone, boleto.linhaDigitavelBoleto);
+            //await evolutionAPI.sendTextMessage(telefone, boleto.linhaDigitavelBoleto);
+            await messageService.sendTextMessage(telefone, boleto.linhaDigitavelBoleto);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
@@ -803,8 +954,18 @@ async function processarOpcaoBoletos(telefone, cliente, messageId) {
 
     }
     
+    /*
+        // TODO: Criar funcao em: mensagens.js
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
+            //`Encontrei *${boletos.data.length}* boleto(s).\n\n` +
+            'Posso te ajudar com algo mais?'
+        );
+    */
+
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         //`Encontrei um total de ${boletos.data.length} boleto(s).\n\n` +
         //`Encontrei *${boletos.data.length}* boleto(s).\n\n` +
@@ -830,7 +991,7 @@ async function enviarBoletoPDF(telefone, idConta, numeroDocumento) {
     
     // TODO: Criar funcao em: mensagens.js
     if (!boletoPDF.success) {
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             `❌ Infelizmente não foi possível gerar o boleto: ${numeroDocumento}. Tente novamente mais tarde, por favor.`
         );
@@ -839,7 +1000,7 @@ async function enviarBoletoPDF(telefone, idConta, numeroDocumento) {
     
     // TODO: Criar funcao em: mensagens.js
     // Enviar PDF via WhatsApp
-    const envio = await evolutionAPI.sendDocument(
+    const envio = await messageService.sendDocument(
         telefone,
         boletoPDF.data.base64,
         boletoPDF.data.filename,
@@ -938,10 +1099,14 @@ async function processarMensagemComTimeout(telefone, mensagem, messageId) {
     
     // TODO: Criar funcao em: mensagens.js
     if (!sessaoValida) {
-        await evolutionAPI.sendTextMessage(
-            telefone,
-            MENSAGENS.ENCERRAMENTO.TIMEOUT()
-        );
+        
+        /*
+            //Session Enecerrada
+            await messageService.sendTextMessage(
+                telefone,
+                MENSAGENS.ENCERRAMENTO.TIMEOUT()
+            );
+        */
         
         // Reiniciar atendimento
         return await etapaInicial(telefone, mensagem, messageId);
@@ -958,7 +1123,7 @@ async function processarMensagemComTimeout(telefone, mensagem, messageId) {
 async function processarEncerramentoManual(telefone) {
     console.log(`👋 Encerrando sessão manualmente: ${telefone}`);
     
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         MENSAGENS.ENCERRAMENTO.FINALIZACAO()
     );
@@ -995,7 +1160,7 @@ async function verificarBloqueioAntesDeAcao(telefone, cnpj) {
     
     // TODO: Criar funcao em: mensagens.js
     if (clienteAPI.blocked) {
-        await evolutionAPI.sendTextMessage(
+        await messageService.sendTextMessage(
             telefone,
             MENSAGENS.BLOQUEIO.BLOQUEADO_DURANTE_ATENDIMENTO()
         );
@@ -1046,14 +1211,14 @@ async function processarOpcaoNFE(telefone, cliente, messageId) {
     console.log('Processando: NFE');
     
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '🔍 Consultando suas notas fiscais...'
     );
     
     // Implementar busca de NFE
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '📋 *Notas Fiscais*\n\n' +
         'Em breve disponibilizaremos suas notas fiscais por aqui.\n' +
@@ -1070,14 +1235,14 @@ async function processarOpcaoCertificados(telefone, cliente, messageId) {
     console.log('Processando: Certificados');
     
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '🔍 Consultando seus certificados...'
     );
     
     // Implementar busca de certificados
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '🏆 *Certificados*\n\n' +
         'Em breve disponibilizaremos seus certificados por aqui.\n' +
@@ -1094,7 +1259,7 @@ async function processarTransferenciaAtendente(telefone, cliente, messageId) {
     console.log('Processando: Transferência para Atendente');
     
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '👨‍💼 *Transferindo Atendimento*\n\n' +
         'Estou direcionando sua mensagem para o nosso setor administrativo.\n' +
@@ -1112,7 +1277,7 @@ async function processarTransferenciaSuporte(telefone, cliente, messageId) {
     console.log('Processando: Transferência para Suporte');
     
     // TODO: Criar funcao em: mensagens.js
-    await evolutionAPI.sendTextMessage(
+    await messageService.sendTextMessage(
         telefone,
         '👨‍💼 *Falar com Suporte*\n\n' +
         'Para falar com o nosso Suporte, entre em contato pelo número:\n' +

@@ -3,6 +3,8 @@ const database = require('../config/database');
 const whatsappService = require('../services/whatsappService');
 const atendimentoService = require('../services/atendimentoService');
 const validacaoService = require('../services/validacaoService');
+const messageFormatAdapter = require('../services/messageFormatAdapter');
+const atendimentoMegaZap = require('../services/atendimentoMegaZap');
 const MENSAGENS = require('../utils/mensagens');
 
 /**
@@ -32,54 +34,66 @@ async function receberMensagem(req, res) {
 
         const webhookData = req.body;
 
-        // Detectar formato do webhook (Evolution 2.3.6 vs versões anteriores)
-        let mensagens = [];
+        // Usar o adaptador para converter o formato da mensagem
+        const mensagensAdaptadas = messageFormatAdapter.adaptMessageFormat(webhookData);
 
-        // Formato Evolution 2.3.6: { event, instance, data: { key, message, ... }, destination, ... }
-        if (webhookData.event === 'messages.upsert' && webhookData.data && webhookData.data.key) {
-            console.log('📌 [WEBHOOK] Formato detectado: Evolution API 2.3.6');
-            mensagens = [webhookData.data];
-        }
-        // Formato anterior: { data: [ { key, message } ] } ou { data: { key, message } }
-        else if (webhookData.data) {
-            console.log('📌 [WEBHOOK] Formato detectado: Evolution API versão anterior');
-            mensagens = Array.isArray(webhookData.data)
-                ? webhookData.data
-                : [webhookData.data];
-        }
-        // Estrutura inválida
-        else {
-            console.log('⚠️ [WEBHOOK] Estrutura inválida');
-            console.log('⚠️ [WEBHOOK] Body recebido:', JSON.stringify(webhookData, null, 2));
+        if (!mensagensAdaptadas || mensagensAdaptadas.length === 0) {
+            console.log('⚠️ [WEBHOOK] Nenhuma mensagem válida encontrada');
             return res.status(400).json({
                 success: false,
-                error: 'Estrutura de webhook inválida'
+                webhook: process.env.MESSAGE_FORMAT,
+                error: 'Estrutura de webhook inválida ou sem mensagens'
             });
         }
 
-        console.log(`📊 [WEBHOOK] Total de mensagens: ${mensagens.length}`);
+        console.log(`📊 [WEBHOOK] Total de mensagens: ${mensagensAdaptadas.length}`);
 
         const resultados = [];
 
-        for (const mensagem of mensagens) {
+        for (const mensagemAdaptada of mensagensAdaptadas) {
             try {
-                const resultado = await processarMensagemWebhook(mensagem);
+                const resultado = await processarMensagemWebhook(mensagemAdaptada);
                 resultados.push(resultado);
             } catch (error) {
                 console.error('❌ [WEBHOOK] Erro ao processar mensagem:', error);
                 resultados.push({
                     success: false,
+                    webhook: process.env.MESSAGE_FORMAT,
                     error: error.message
                 });
             }
         }
 
-        mensagensProcessadas += mensagens.length;
+        mensagensProcessadas += mensagensAdaptadas.length;
 
-        // Responder rapidamente ao webhook
+        // Verificar formato de resposta
+        const messageFormat = process.env.MESSAGE_FORMAT || '1';
+
+        // Megazap espera apenas o conteúdo de "data", sem wrapper
+        if (messageFormat === '2') {
+            console.log('📤 [WEBHOOK] Retornando resposta formato Megazap (apenas data)');
+
+            // Se houver apenas 1 resultado, retornar diretamente o data
+            if (resultados.length === 1 && resultados[0].success && resultados[0].data) {
+                console.log('📤 [WEBHOOK] Retornando payload único para Megazap');
+                return res.status(200).json(resultados[0].data);
+            }
+
+            // Se houver múltiplos resultados, retornar array de data
+            const payloadsMegazap = resultados
+                .filter(r => r.success && r.data)
+                .map(r => r.data);
+
+            console.log('📤 [WEBHOOK] Retornando array de payloads para Megazap');
+            return res.status(200).json(payloadsMegazap.length === 1 ? payloadsMegazap[0] : payloadsMegazap);
+        }
+
+        // Evolution/padrão - retornar com wrapper completo
+        console.log('📤 [WEBHOOK] Retornando resposta formato Evolution (com wrapper)');
         res.status(200).json({
             success: true,
-            processadas: mensagens.length,
+            webhook: messageFormat,
+            processadas: mensagensAdaptadas.length,
             resultados: resultados
         });
 
@@ -87,106 +101,124 @@ async function receberMensagem(req, res) {
         console.error('❌ [WEBHOOK] Erro fatal:', error);
         res.status(500).json({
             success: false,
+            webhook: process.env.MESSAGE_FORMAT,
             error: 'Erro ao processar webhook'
         });
     }
 }
 
 /**
- * Processa uma única mensagem do webhook
- * @param {Object} messageData - Dados da mensagem
+ * FLUXO PADRAO WHATSAPP
+ * Processa uma única mensagem do webhook (já adaptada pelo messageFormatAdapter)
+ * @param {Object} mensagemAdaptada - Dados da mensagem no formato padrão adaptado
  * @returns {Promise<Object>} Resultado do processamento
- */
-async function processarMensagemWebhook(messageData) {
+
+async function processarMensagemWebhook(mensagemAdaptada) {
     try {
-        // Extrair dados da mensagem
-        const { key, message, messageTimestamp } = messageData;
-        
-        if (!key || !message) {
-            console.log('⚠️ [WEBHOOK] Mensagem sem key ou message');
-            return { success: false, error: 'Dados incompletos' };
+        // Extrair dados da mensagem adaptada
+        const { telefone, messageText, messageId, fromMe, originalData } = mensagemAdaptada;
+
+        if (!telefone || !messageText) {
+            console.log('⚠️ [WEBHOOK] Mensagem sem telefone ou texto');
+            return { success: false, webhook: process.env.MESSAGE_FORMAT, error: 'Dados incompletos' };
         }
-        
-        // Extrair informações
-        const remoteJid = key.remoteJid;
-        const messageId = key.id;
-        const fromMe = key.fromMe;
-        
-        // Extrair texto da mensagem
-        const messageText = message.conversation || 
-                           message.extendedTextMessage?.text || 
-                           message.buttonsResponseMessage?.selectedButtonId ||
-                           message.listResponseMessage?.title ||
-                           '';
-        
-        console.log('📱 [WEBHOOK] RemoteJid:', remoteJid);
+
+        console.log('📱 [WEBHOOK] Telefone:', telefone);
         console.log('💬 [WEBHOOK] Texto:', messageText);
         console.log('🆔 [WEBHOOK] MessageId:', messageId);
         console.log('👤 [WEBHOOK] FromMe:', fromMe);
-        
+
         // Validações iniciais
-        const validacao = validarMensagemWebhook(remoteJid, messageText, fromMe);
+        const validacao = validarMensagemWebhook(telefone, messageText, fromMe);
         if (!validacao.valida) {
             console.log(`⚠️ [WEBHOOK] ${validacao.motivo}`);
-            return { success: true, data: validacao.motivo };
+            return { success: true, webhook: process.env.MESSAGE_FORMAT, data: validacao.motivo };
         }
-        
-        const telefone = validacao.telefone;
-        
+
+        const telefoneNormalizado = validacao.telefone;
+
         // Decidir qual fluxo usar
         if (WEBHOOK_CONFIG.USAR_NOVO_FLUXO && WEBHOOK_CONFIG.VALIDAR_COM_API) {
             // Novo fluxo com endpoint API
-            return await processarComNovoFluxo(telefone, messageText, messageId);
+            return await processarComNovoFluxo(telefoneNormalizado, messageText, messageId);
         } else {
-            // Fluxo antigo com database
-            return await processarComFluxoAntigo(messageData);
+            // Fluxo antigo com database (usar dados originais se disponível)
+            return await processarComFluxoAntigo(originalData || mensagemAdaptada);
         }
-        
+
     } catch (error) {
         console.error('❌ [WEBHOOK] Erro ao processar mensagem:', error);
-        return { success: false, error: error.message };
+        return { success: false, webhook: process.env.MESSAGE_FORMAT, error: error.message };
+    }
+}
+ */
+
+/**
+ * FLUXO PADRAO WHATSAPP > MEGAZAP
+ * Processa uma única mensagem do webhook (já adaptada pelo messageFormatAdapter)
+ * @param {Object} mensagemAdaptada - Dados da mensagem no formato padrão adaptado
+ * @returns {Promise<Object>} Resultado do processamento
+*/
+
+async function processarMensagemWebhook(mensagemAdaptada) {
+    const { telefone, messageText, messageId, megazap } = mensagemAdaptada;
+    
+    // Verificar formato
+    const messageFormat = process.env.MESSAGE_FORMAT || '1';
+    
+    if (messageFormat === '2' && megazap) {
+        // Usar fluxo Megazap unificado
+        return await atendimentoMegaZap.fluxoAtendimentoMegazap(
+            telefone, messageText, messageId, megazap
+        );
+    } else {
+        // Usar fluxo Evolution (padrão)
+        return await atendimentoService.fluxoAtendimento(
+            telefone, messageText, messageId
+        );
     }
 }
 
+
 /**
  * Valida mensagem do webhook
- * @param {string} remoteJid - JID remoto
+ * @param {string} telefone - Telefone (já pode estar limpo ou com sufixos)
  * @param {string} messageText - Texto da mensagem
  * @param {boolean} fromMe - Se é do bot
  * @returns {Object} Resultado da validação
  */
-function validarMensagemWebhook(remoteJid, messageText, fromMe) {
+function validarMensagemWebhook(telefone, messageText, fromMe) {
     // Ignorar mensagens do próprio bot
     if (fromMe) {
         return { valida: false, motivo: 'Mensagem do próprio bot' };
     }
-    
+
+    // Limpar telefone de possíveis sufixos do WhatsApp
+    const telefoneLimpo = telefone.replace('@s.whatsapp.net', '').replace('@g.us', '').replace('status@broadcast', '');
+
     // Ignorar mensagens de grupos
-    if (remoteJid.includes('@g.us')) {
+    if (telefone.includes('@g.us')) {
         return { valida: false, motivo: 'Mensagem de grupo' };
     }
-    
+
     // Ignorar status do WhatsApp
-    if (remoteJid.includes('status@broadcast')) {
+    if (telefone.includes('status@broadcast')) {
         return { valida: false, motivo: 'Status do WhatsApp' };
     }
-    
+
     // Ignorar mensagens vazias
     if (!messageText || !messageText.trim()) {
         return { valida: false, motivo: 'Mensagem vazia' };
     }
-    
-    // Extrair telefone
-    const telefone = remoteJid.replace('@s.whatsapp.net', '');
-    
+
     // Validar formato do telefone
-    if (!validacaoService.validarFormatoTelefone(telefone)) {
+    if (!validacaoService.validarFormatoTelefone(telefoneLimpo)) {
         return { valida: false, motivo: 'Formato de telefone inválido' };
     }
-    
+
     return {
         valida: true,
-        telefone: validacaoService.normalizarTelefoneWhatsApp(telefone),
+        telefone: validacaoService.normalizarTelefoneWhatsApp(telefoneLimpo),
         messageText: messageText.trim()
     };
 }
@@ -228,6 +260,7 @@ async function processarComNovoFluxo(telefone, messageText, messageId) {
             
             return { 
                 success: true, 
+                webhook: process.env.MESSAGE_FORMAT,
                 status: 'bloqueado',
                 data: 'Cliente bloqueado'
             };
@@ -247,6 +280,7 @@ async function processarComNovoFluxo(telefone, messageText, messageId) {
             
             return { 
                 success: true, 
+                webhook: process.env.MESSAGE_FORMAT,
                 status: 'sem_permissao',
                 data: 'Sem permissão de faturamento'
             };
@@ -263,6 +297,7 @@ async function processarComNovoFluxo(telefone, messageText, messageId) {
         
         return {
             success: true,
+            webhook: process.env.MESSAGE_FORMAT,
             status: resultado.status,
             data: resultado
         };
@@ -275,6 +310,7 @@ async function processarComNovoFluxo(telefone, messageText, messageId) {
         
         return { 
             success: false, 
+            webhook: process.env.MESSAGE_FORMAT,
             error: error.message 
         };
     }
@@ -294,6 +330,7 @@ async function processarComFluxoAntigo(messageData) {
         
         return {
             success: resultado.success,
+            webhook: process.env.MESSAGE_FORMAT,
             status: 'processado_antigo',
             data: resultado.data
         };
@@ -302,6 +339,7 @@ async function processarComFluxoAntigo(messageData) {
         console.error('❌ [WEBHOOK] Erro no fluxo antigo:', error);
         return { 
             success: false, 
+            webhook: process.env.MESSAGE_FORMAT,
             error: error.message 
         };
     }
@@ -312,11 +350,14 @@ async function processarComFluxoAntigo(messageData) {
  * @param {string} telefone - Número do telefone
  */
 async function enviarMensagemTimeout(telefone) {
-    const evolutionAPI = require('../config/evolution');
-    await evolutionAPI.sendTextMessage(
-        telefone,
-        MENSAGENS.ENCERRAMENTO.TIMEOUT()
-    );
+    const getMessageFormat = process.env.MESSAGE_FORMAT;
+    if(getMessageFormat==1){
+        const evolutionAPI = require('../config/evolution');
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            MENSAGENS.ENCERRAMENTO.TIMEOUT()
+        );
+    }
 }
 
 /**
@@ -325,11 +366,14 @@ async function enviarMensagemTimeout(telefone) {
  * @param {string} mensagemPersonalizada - Mensagem personalizada
  */
 async function enviarMensagemBloqueio(telefone, mensagemPersonalizada) {
-    const evolutionAPI = require('../config/evolution');
-    await evolutionAPI.sendTextMessage(
-        telefone,
-        mensagemPersonalizada || MENSAGENS.BLOQUEIO.CLIENTE_BLOQUEADO()
-    );
+    const getMessageFormat = process.env.MESSAGE_FORMAT;
+    if(getMessageFormat==1){
+        const evolutionAPI = require('../config/evolution');
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            mensagemPersonalizada || MENSAGENS.BLOQUEIO.CLIENTE_BLOQUEADO()
+        );
+    }
 }
 
 /**
@@ -338,11 +382,14 @@ async function enviarMensagemBloqueio(telefone, mensagemPersonalizada) {
  * @param {string} mensagemPersonalizada - Mensagem personalizada
  */
 async function enviarMensagemSemPermissao(telefone, mensagemPersonalizada) {
-    const evolutionAPI = require('../config/evolution');
-    await evolutionAPI.sendTextMessage(
-        telefone,
-        mensagemPersonalizada || MENSAGENS.PERMISSAO.SEM_PERMISSAO()
-    );
+    const getMessageFormat = process.env.MESSAGE_FORMAT;
+    if(getMessageFormat==1){
+        const evolutionAPI = require('../config/evolution');
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            mensagemPersonalizada || MENSAGENS.PERMISSAO.SEM_PERMISSAO()
+        );
+    }
 }
 
 /**
@@ -350,12 +397,15 @@ async function enviarMensagemSemPermissao(telefone, mensagemPersonalizada) {
  * @param {string} telefone - Número do telefone
  */
 async function enviarMensagemErro(telefone) {
-    const evolutionAPI = require('../config/evolution');
-    await evolutionAPI.sendTextMessage(
-        telefone,
-        '❌ Desculpe, ocorreu um erro temporário.\n\n' +
-        'Por favor, tente novamente em alguns instantes.'
-    );
+    const getMessageFormat = process.env.MESSAGE_FORMAT;
+    if(getMessageFormat==1){
+        const evolutionAPI = require('../config/evolution');
+        await evolutionAPI.sendTextMessage(
+            telefone,
+            '❌ Desculpe, ocorreu um erro temporário.\n\n' +
+            'Por favor, tente novamente em alguns instantes.'
+        );
+    }
 }
 
 /**
@@ -505,6 +555,7 @@ async function healthCheck(req, res) {
             checks: {
                 database: dbOk ? 'ok' : 'erro',
                 apiExterna: apiOk ? 'ok' : 'erro',
+                webhook: process.env.MESSAGE_FORMAT,
                 evolutionAPI: evolutionOk ? 'ok' : 'erro'
             },
             timestamp: new Date().toISOString()
