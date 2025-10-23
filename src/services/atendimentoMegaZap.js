@@ -30,8 +30,9 @@ const estadosUsuarios = new Map();
  * Converte valores numéricos recebidos em ações
  */
 const OPCOES_MEGAZAP = {
-    '5': 'boleto',
-    '6': 'notafiscal'
+    '1': 'boleto',
+    '2': 'notafiscal',
+    '3': 'atendimento'
 };
 
 /**
@@ -67,7 +68,7 @@ function verificarTimeoutSessao(telefone) {
     const tempoDecorrido = agora - estado.ultimaInteracao;
 
     if (tempoDecorrido > TIMEOUT_SESSAO) {
-        console.log(`⏱️ [MEGAZAP] Sessão expirou para ${telefone}`);
+        console.log(`[MEGAZAP] Sessão expirou para ${telefone}`);
         estadosUsuarios.delete(telefone);
         return false;
     }
@@ -105,6 +106,23 @@ function verificarPalavrasChaveBoleto(mensagem) {
 }
 
 /**
+ * Verifica se a mensagem contém palavras-chave para Nota Fiscal
+ * @param {string} mensagem - Mensagem recebida do cliente
+ * @returns {boolean} True se contém palavra-chave de Nota Fiscal
+ */
+function verificarPalavrasChaveNotaFiscal(mensagem) {
+    const palavrasChave = [
+        'nota',
+        'notafiscal',
+        'nota fiscal',
+        'xml'
+    ];
+
+    const mensagemLower = mensagem.toLowerCase().trim();
+    return palavrasChave.some(palavra => mensagemLower.includes(palavra));
+}
+
+/**
  * Fluxo principal de atendimento Megazap
  * @param {string} telefone - Número do telefone
  * @param {string} mensagem - Mensagem recebida
@@ -114,16 +132,16 @@ function verificarPalavrasChaveBoleto(mensagem) {
  */
 async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapData = {}) {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🚀 [MEGAZAP] Iniciando fluxo de atendimento');
-    console.log(`📱 Telefone: ${telefone}`);
-    console.log(`💬 Mensagem: ${mensagem}`);
-    console.log(`📊 Dados Megazap:`, megazapData);
+    console.log('[MEGAZAP] Iniciando fluxo de atendimento');
+    console.log(`Telefone: ${telefone}`);
+    console.log(`Mensagem: ${mensagem}`);
+    console.log(`Dados Megazap:`, megazapData);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     // Verificar timeout de sessão
     const sessaoValida = verificarTimeoutSessao(telefone);
     if (!sessaoValida) {
-        console.log('⏱️ [MEGAZAP] Sessão expirou ou não existe - criando nova');
+        console.log('[MEGAZAP] Sessão expirou ou não existe - criando nova');
     }
 
     // Obter ou criar estado do usuário
@@ -134,7 +152,7 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
 
     // Mapear opção numérica para ação
     const opcao = OPCOES_MEGAZAP[mensagem.trim()];
-    console.log(`🔍 [MEGAZAP] Opção mapeada: ${mensagem} → ${opcao || 'não reconhecida'}`);
+    console.log(`[MEGAZAP] Opção mapeada: ${mensagem} → ${opcao || 'não reconhecida'}`);
 
     // Verificar palavras-chave
     const temPalavraBoleto = verificarPalavrasChaveBoleto(mensagem);
@@ -143,16 +161,26 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
     let acao = opcao;
     if (!acao && temPalavraBoleto) {
         acao = 'boleto';
-        console.log('🔍 [MEGAZAP] Palavra-chave de boleto detectada');
+        console.log('[MEGAZAP] Palavra-chave de boleto detectada');
     }
 
-    // Se não há ação identificada, retornar erro
+    // Se não há ação identificada, retornar Menu
     if (!acao) {
         console.log('❌ [MEGAZAP] Nenhuma ação identificada');
-        return await messageService.sendTextMessage(
+        
+        // Menu MegaZap
+        const menu = getDirectToMenu(telefone, messageId);
+        return await messageService.sendDirectToMenu(
             telefone,
-            '❌ Opção não reconhecida. Por favor, envie uma opção válida:\n\n5 - Boletos\n6 - Notas Fiscais'
+            menu
         );
+        
+        /*
+            return await messageService.sendTextMessage(
+                telefone,
+                '❌ Opção não reconhecida. Por favor, envie uma opção válida:\n\n5 - Boletos\n6 - Notas Fiscais'
+            );
+        */
     }
 
     // Processar ação
@@ -162,6 +190,9 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
 
         case 'notafiscal':
             return await processarFluxoNotaFiscal(telefone, mensagem, messageId, megazapData, estado);
+
+        case 'atendimento':
+            return await processarFluxoAtendimento(telefone);
 
         default:
             return await messageService.sendTextMessage(
@@ -181,16 +212,16 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
  * @returns {Promise<Object>} Resposta unificada
  */
 async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, estado) {
-    console.log('💰 [MEGAZAP] Processando fluxo de boletos');
-    console.log('💰 [MEGAZAP] Telefone recebido:', telefone);
+    console.log('[MEGAZAP] Processando fluxo de boletos');
+    console.log('[MEGAZAP] Telefone recebido:', telefone);
 
     // 1. Buscar cliente por telefone
     const clienteAPI = await endpoint.getClienteByCelular(telefone);
-    console.log('💰 [MEGAZAP] Resposta completa do endpoint:', JSON.stringify(clienteAPI, null, 2));
+    console.log('[MEGAZAP] Resposta completa do endpoint:', JSON.stringify(clienteAPI, null, 2));
 
     // 2. Validar cliente bloqueado
     if (clienteAPI.blocked) {
-        console.log('🚫 [MEGAZAP] Cliente bloqueado');
+        console.log('❌ [MEGAZAP] Cliente bloqueado');
         return await messageService.sendTextMessage(
             telefone,
             clienteAPI.error || '❌ Seu acesso está bloqueado. Entre em contato com o suporte.'
@@ -206,9 +237,9 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
         return await messageService.sendTextMessage(telefone, mensagemErro);
     }
 
-    console.log('✅ [MEGAZAP] Cliente válido - Resposta completa:', clienteAPI);
-    console.log('🔍 [MEGAZAP] clienteAPI.data:', clienteAPI.data);
-    console.log('🔍 [MEGAZAP] clienteAPI.contato:', clienteAPI.contato);
+    console.log('[MEGAZAP] Cliente válido - Resposta completa:', clienteAPI);
+    console.log('[MEGAZAP] clienteAPI.data:', clienteAPI.data);
+    console.log('[MEGAZAP] clienteAPI.contato:', clienteAPI.contato);
 
     // Extrair ID do cliente
     // O endpoint retorna uma estrutura aninhada:
@@ -220,22 +251,22 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
     // Opção 1: Usar idParceiro do contato (mais confiável)
     if (clienteAPI.contato && clienteAPI.contato.idParceiro) {
         clienteId = clienteAPI.contato.idParceiro;
-        console.log(`📋 [MEGAZAP] ID extraído de contato.idParceiro: ${clienteId}`);
+        console.log(`[MEGAZAP] ID extraído de contato.idParceiro: ${clienteId}`);
 
         // Buscar dados completos do cliente no array
         if (clienteAPI.data && clienteAPI.data.data && Array.isArray(clienteAPI.data.data)) {
             clienteData = clienteAPI.data.data.find(c => c.id === clienteId);
             if (clienteData) {
-                console.log(`✅ [MEGAZAP] Cliente encontrado no array: ${clienteData.nome}`);
+                console.log(`[MEGAZAP] Cliente encontrado no array: ${clienteData.nome}`);
             } else {
-                console.log(`⚠️ [MEGAZAP] Cliente não encontrado no array, usando primeiro`);
+                console.log(`[MEGAZAP] Cliente não encontrado no array, usando primeiro`);
                 clienteData = clienteAPI.data.data[0];
             }
         }
     }
     // Opção 2: Usar primeiro cliente do array data.data
     else if (clienteAPI.data && clienteAPI.data.data && Array.isArray(clienteAPI.data.data)) {
-        console.log(`📋 [MEGAZAP] Array de clientes encontrado com ${clienteAPI.data.data.length} elementos`);
+        console.log(`[MEGAZAP] Array de clientes encontrado com ${clienteAPI.data.data.length} elementos`);
 
         if (clienteAPI.data.data.length === 0) {
             console.log('⚠️ [MEGAZAP] Array de clientes vazio');
@@ -247,11 +278,11 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
 
         clienteData = clienteAPI.data.data[0];
         clienteId = clienteData.id;
-        console.log(`📋 [MEGAZAP] Usando primeiro cliente do array: ID=${clienteId}, Nome=${clienteData.nome}`);
+        console.log(`[MEGAZAP] Usando primeiro cliente do array: ID=${clienteId}, Nome=${clienteData.nome}`);
     }
     // Opção 3: Fallback - dados diretos
     else if (clienteAPI.data && Array.isArray(clienteAPI.data)) {
-        console.log(`📋 [MEGAZAP] clienteAPI.data é um array direto`);
+        console.log(`[MEGAZAP] clienteAPI.data é um array direto`);
         clienteData = clienteAPI.data[0];
         clienteId = clienteData.id;
     } else {
@@ -281,24 +312,24 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
 
     // 4. Buscar boletos
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔍 [MEGAZAP] DEBUG - Antes de buscar boletos:');
-    console.log('   clienteId:', clienteId);
-    console.log('   Tipo de clienteId:', typeof clienteId);
-    console.log('   clienteData:', clienteData);
+    console.log('[MEGAZAP] DEBUG - Antes de buscar boletos:');
+    console.log('clienteId:', clienteId);
+    console.log('Tipo de clienteId:', typeof clienteId);
+    console.log('clienteData:', clienteData);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`🔍 [MEGAZAP] Buscando boletos para cliente ID: ${clienteId}`);
+    console.log(`[MEGAZAP] Buscando boletos para cliente ID: ${clienteId}`);
     const boletos = await endpoint.getBoletosByCNPJ(clienteId);
 
     // 5. Validar se existem boletos
     if (!boletos.success || boletos.data.length === 0) {
-        console.log('📭 [MEGAZAP] Nenhum boleto encontrado');
+        console.log('[MEGAZAP] Nenhum boleto encontrado');
         return await messageService.sendTextMessage(
             telefone,
-            '✅ Você não possui boletos em aberto no momento.\n\nPosso te ajudar com algo mais?'
+            'Você não possui boletos em aberto no momento.\n\nPosso te ajudar com algo mais?'
         );
     }
 
-    console.log(`📊 [MEGAZAP] ${boletos.data.length} boleto(s) encontrado(s)`);
+    console.log(`[MEGAZAP] ${boletos.data.length} boleto(s) encontrado(s)`);
 
     // 6. Gerar resposta unificada com todos os boletos
     return await gerarRespostaBoletosUnificada(telefone, boletos.data, clienteData);
@@ -312,7 +343,7 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
  * @returns {Promise<Object>} Resposta com mensagem e attachments
  */
 async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
-    console.log('📝 [MEGAZAP] Gerando resposta unificada de boletos');
+    console.log('[MEGAZAP] Gerando resposta unificada de boletos');
 
     // Inicializar mensagem
     let mensagem = `Encontrei *${boletos.length}* boleto(s).\n\n`;
@@ -322,7 +353,7 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
 
     // Processar cada boleto
     for (const boleto of boletos) {
-        console.log(`📄 [MEGAZAP] Processando boleto: ${boleto.numeroDocumento}`);
+        console.log(`[MEGAZAP] Processando boleto: ${boleto.numeroDocumento}`);
 
         // Adicionar informações do boleto na mensagem
         mensagem += `*Boleto: ${boleto.numeroDocumento}*\n`;
@@ -333,10 +364,10 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
         const boletoPDF = await endpoint.geraBoletoPDF(boleto.idConta);
 
         if (!boletoPDF.success) {
-            console.error(`❌ [MEGAZAP] Erro ao gerar PDF do boleto ${boleto.numeroDocumento}`);
+            console.error(`[MEGAZAP] Erro ao gerar PDF do boleto ${boleto.numeroDocumento}`);
             mensagem += `⚠️ Infelizmente não foi possível gerar o PDF deste boleto.\n`;
         } else {
-            console.log(`✅ [MEGAZAP] PDF gerado para boleto ${boleto.numeroDocumento}`);
+            console.log(`[MEGAZAP] PDF gerado para boleto ${boleto.numeroDocumento}`);
 
             // Limpar base64
             const base64Clean = boletoPDF.data.base64
@@ -358,7 +389,7 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
 
     mensagem += 'Posso te ajudar com algo mais?';
 
-    console.log(`📦 [MEGAZAP] Total de anexos: ${attachments.length}`);
+    console.log(`[MEGAZAP] Total de anexos: ${attachments.length}`);
 
     // Se não há anexos (nenhum PDF foi gerado), enviar apenas texto
     if (attachments.length === 0) {
@@ -367,7 +398,7 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
     }
 
     // Enviar resposta unificada com todos os documentos
-    console.log('📤 [MEGAZAP] Enviando resposta unificada com documentos');
+    console.log('[MEGAZAP] Enviando resposta unificada com documentos');
 
     // Usar diretamente o serviço Megazap para ter controle total sobre attachments
     const megazapService = messageService.megazapService;
@@ -379,7 +410,7 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
         attachments: attachments
     };
 
-    console.log('✅ [MEGAZAP] Payload unificado gerado:', {
+    console.log('[MEGAZAP] Payload unificado gerado:', {
         type: payload.type,
         textLength: payload.text.length,
         attachmentsCount: payload.attachments.length
@@ -402,11 +433,25 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
  * @returns {Promise<Object>} Resposta
  */
 async function processarFluxoNotaFiscal(telefone, mensagem, messageId, megazapData, estado) {
-    console.log('📋 [MEGAZAP] Processando fluxo de notas fiscais');
+    console.log('[MEGAZAP] Processando fluxo de notas fiscais');
 
     return await messageService.sendTextMessage(
         telefone,
-        '📋 A funcionalidade de Notas Fiscais ainda não está disponível.\n\nPosso te ajudar com algo mais?'
+        'A funcionalidade de Notas Fiscais ainda não está disponível.\n\nPosso te ajudar com algo mais?'
+    );
+}
+
+/**
+ * Processa fluxo de Atendimento (move para o menu especifico no MegaZap)
+ * @param {string} telefone - Número do telefone
+ * @returns {Promise<Object>} Resposta
+ */
+async function processarFluxoAtendimento(telefone) {
+    console.log('[MEGAZAP] Processando fluxo de Redirecionamento Atendimento');
+
+    return await messageService.sendDirectToMenu(
+        telefone,
+        process.env.MEGAZAP_MENU
     );
 }
 
@@ -428,6 +473,68 @@ function obterEstado(telefone) {
     return estadosUsuarios.get(telefone) || null;
 }
 
+/**
+ * Gera estrutura de menu padrão para Megazap
+ * @param {string} phoneNumber - Número do telefone
+ * @param {string} messageId - ID da mensagem
+ * @returns {Object} Objeto com estrutura do menu
+ */
+function getDirectToMenu(phoneNumber, messageId) {
+    console.log('[MEGAZAP] Gerando menu padrão');
+    console.log(`[MEGAZAP] Telefone: ${phoneNumber}, MessageId: ${messageId}`);
+
+    const webhookUrl = process.env.WEBHOOK_URL || 'https://botfox.conb2b.com.br/webhook/message';
+
+    const menu = [
+        {
+            number: 1,
+            text: "Consultar boletos",
+            callback: {
+                endpoint: webhookUrl,
+                data: {
+                    text: "boleto",
+                    contact: {
+                        key: phoneNumber
+                    },
+                    id: messageId
+                }
+            }
+        },
+        {
+            number: 2,
+            text: "Consultar Nota Fiscal",
+            callback: {
+                endpoint: webhookUrl,
+                data: {
+                    text: "notafiscal",
+                    contact: {
+                        key: phoneNumber
+                    },
+                    id: messageId
+                }
+            }
+        },
+        {
+            number: 3,
+            text: "Falar com o Financeiro",
+            callback: {
+                endpoint: webhookUrl,
+                data: {
+                    text: "atendimento",
+                    contact: {
+                        key: phoneNumber
+                    },
+                    id: messageId
+                }
+            }
+        }
+    ];
+
+    console.log('[MEGAZAP] Menu padrão gerado com', menu.length, 'opções');
+
+    return { menu };
+}
+
 module.exports = {
     fluxoAtendimentoMegazap,
     processarFluxoBoleto,
@@ -435,5 +542,6 @@ module.exports = {
     limparSessao,
     obterEstado,
     verificarTimeoutSessao,
+    getDirectToMenu,
     OPCOES_MEGAZAP
 };
