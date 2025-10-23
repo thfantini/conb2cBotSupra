@@ -132,6 +132,30 @@ async function sendQuestion(phoneNumber, message, endpoint) {
  * @param {string|number} menu - UUID do menu
  * @returns {Promise<Object>} Resultado
  */
+async function sendMenu(phoneNumber, menu) {
+    const service = getMessageService();
+    const format = getMessageFormat();
+
+    if (format === MESSAGE_FORMATS.MEGAZAP && service.sendMenu) {
+        return await service.sendMenu(phoneNumber, menu);
+    } else {
+        // Fallback para Evolution: não suportado
+        console.log('[MessageService] sendMenu não suportado em Evolution');
+        return {
+            success: true,
+            data: { message: 'sendMenu not supported in Evolution' },
+            error: null
+        };
+    }
+}
+
+/**
+ * Redireciona para menu (específico Megazap)
+ * Para Evolution, não faz nada (retorna sucesso)
+ * @param {string} phoneNumber - Número do telefone
+ * @param {string|number} menu - UUID do menu
+ * @returns {Promise<Object>} Resultado
+ */
 async function sendDirectToMenu(phoneNumber, menu) {
     const service = getMessageService();
     const format = getMessageFormat();
@@ -278,6 +302,7 @@ module.exports = {
     sendButtonMessage,
     sendListMessage,
     sendQuestion,          // Específico Megazap, fallback Evolution
+    sendMenu,              // Específico Megazap
     sendDirectToMenu,      // Específico Megazap
     formatPhoneNumber,
     testConnection,

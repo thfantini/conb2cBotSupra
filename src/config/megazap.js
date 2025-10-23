@@ -148,6 +148,38 @@ function sendQuestion(phoneNumber, message, endpoint) {
 
 /**
  * Redireciona para menu
+ * @param {string} phoneNumber - Número do telefone
+ * @param {Object} menu - JSON do menu
+ * @returns {Object} JSON formatado para Megazap
+ */
+function sendMenu(phoneNumber, menu) {
+    try {
+        console.log(`🔀 [MEGAZAP] Gerando JSON de Menu para ${phoneNumber}`);
+
+        const payload = {
+            type: "MENU",
+            items: menu
+        };
+
+        console.log('[MEGAZAP] JSON de Menu gerado com sucesso');
+        return {
+            success: true,
+            data: payload,
+            error: null
+        };
+
+    } catch (error) {
+        console.error('❌ [MEGAZAP] Erro ao gerar JSON de Menu:', error.message);
+        return {
+            success: false,
+            data: null,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Redireciona para menu
  * @param {string} phoneNumber - Número do telefone (mantido para compatibilidade futura)
  * @param {string|number} menu - UUID do menu
  * @returns {Object} JSON formatado para Megazap
@@ -336,6 +368,7 @@ module.exports = {
     sendTextMessage,
     sendDocument,
     sendQuestion,
+    sendMenu,
     sendDirectToMenu,
     sendButtonMessage,
     sendListMessage,

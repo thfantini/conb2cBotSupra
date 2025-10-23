@@ -169,8 +169,8 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
         console.log('❌ [MEGAZAP] Nenhuma ação identificada');
         
         // Menu MegaZap
-        const menu = getDirectToMenu(telefone, messageId);
-        return await messageService.sendDirectToMenu(
+        const menu = getMenu(telefone, messageId);
+        return await messageService.sendMenu(
             telefone,
             menu
         );
@@ -479,11 +479,11 @@ function obterEstado(telefone) {
  * @param {string} messageId - ID da mensagem
  * @returns {Object} Objeto com estrutura do menu
  */
-function getDirectToMenu(phoneNumber, messageId) {
+function getMenu(phoneNumber, messageId) {
     console.log('[MEGAZAP] Gerando menu padrão');
     console.log(`[MEGAZAP] Telefone: ${phoneNumber}, MessageId: ${messageId}`);
 
-    const webhookUrl = process.env.WEBHOOK_URL || 'https://botfox.conb2b.com.br/webhook/message';
+    const webhookUrl = process.env.WEBHOOK_URL;
 
     const menu = [
         {
@@ -532,7 +532,7 @@ function getDirectToMenu(phoneNumber, messageId) {
 
     console.log('[MEGAZAP] Menu padrão gerado com', menu.length, 'opções');
 
-    return { menu };
+    return menu;
 }
 
 module.exports = {
@@ -542,6 +542,6 @@ module.exports = {
     limparSessao,
     obterEstado,
     verificarTimeoutSessao,
-    getDirectToMenu,
+    getMenu,
     OPCOES_MEGAZAP
 };
