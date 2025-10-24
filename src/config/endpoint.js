@@ -680,6 +680,237 @@ async function geraBoletoData(idConta) {
     };
 }
 
+
+/**
+ * Busca notas fiscais por ID do parceiro (CNPJ)
+ * @param {number} idParceiro - ID do parceiro
+ * @returns {Promise} Lista de notas fiscais
+ */
+async function getNotaByCNPJ(idParceiro) {
+    console.log('getNotaByCNPJ:', idParceiro);
+
+    //Mock ( Cliente Supra > Cliente: BNT BUSINESS )
+    if(idParceiro==724){
+        idParceiro = 2136;
+    }
+
+    // Mock: ID fixo para teste
+    const idConta = 25960;
+    const result = await geraNotaXML(idConta);
+
+    if (!result.success) {
+        return {
+            success: false,
+            error: result.error,
+            data: []
+        };
+    }
+
+    // Verificar se há dados
+    if (!result.data) {
+        return {
+            success: false,
+            error: 'Nenhuma nota fiscal encontrada',
+            data: []
+        };
+    }
+
+    // Retornar array de notas (mockado com apenas 1 nota)
+    // Estrutura similar a getBoletosByCNPJ que retorna array de boletos
+    return {
+        success: true,
+        data: [result.data], // Array com os dados da nota
+        error: null
+    };
+}
+
+
+
+/**
+ * Extrai a chave de acesso do campo OutrasInformacoes
+ * @param {string} outrasInformacoes - Texto completo do campo OutrasInformacoes
+ * @returns {string|null} Chave de acesso extraída ou null
+ */
+function extrairChaveAcesso(outrasInformacoes) {
+    if (!outrasInformacoes) return null;
+
+    // Procurar por sequência de 44 dígitos após "Chave de acesso"
+    const regex = /Chave\s+de\s+acesso[^:]*:\s*(\d{44})/i;
+    const match = outrasInformacoes.match(regex);
+
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    // Tentar encontrar qualquer sequência de 44 dígitos
+    const regexNumeros = /(\d{44})/;
+    const matchNumeros = outrasInformacoes.match(regexNumeros);
+
+    return matchNumeros ? matchNumeros[1] : null;
+}
+
+/**
+ * Faz parsing do XML da Nota Fiscal e extrai informações
+ * @param {string} xmlString - String XML completa
+ * @returns {Object} Objeto com dados extraídos da nota
+ */
+function parseNotaFiscalXML(xmlString) {
+    try {
+        // Extrair Número da Nota
+        const numeroMatch = xmlString.match(/<Numero>([^<]+)<\/Numero>/i);
+        const numero = numeroMatch ? numeroMatch[1] : null;
+
+        // Extrair Código de Verificação
+        const codigoVerificacaoMatch = xmlString.match(/<CodigoVerificacao>([^<]+)<\/CodigoVerificacao>/i);
+        const codigoVerificacao = codigoVerificacaoMatch ? codigoVerificacaoMatch[1] : null;
+
+        // Extrair Valor Líquido da NFSe (Servico > Valores > ValorLiquidoNfse)
+        const valorLiquidoMatch = xmlString.match(/<ValorLiquidoNfse>([^<]+)<\/ValorLiquidoNfse>/i);
+        const valorLiquidoNfse = valorLiquidoMatch ? valorLiquidoMatch[1] : null;
+
+        // Extrair Data de Emissão
+        const dataEmissaoMatch = xmlString.match(/<DataEmissao>([^<]+)<\/DataEmissao>/i);
+        const dataEmissao = dataEmissaoMatch ? dataEmissaoMatch[1] : null;
+
+        // Extrair Outras Informações
+        const outrasInformacoesMatch = xmlString.match(/<OutrasInformacoes>([^<]+)<\/OutrasInformacoes>/i);
+        const outrasInformacoes = outrasInformacoesMatch ? outrasInformacoesMatch[1] : null;
+
+        // Extrair a chave de acesso do campo OutrasInformacoes
+        const chaveAcesso = extrairChaveAcesso(outrasInformacoes);
+
+        return {
+            numero,
+            codigoVerificacao,
+            dataEmissao,
+            valorLiquidoNfse,
+            outrasInformacoes,
+            chaveAcesso
+        };
+    } catch (error) {
+        console.error('❌ Erro ao fazer parsing do XML:', error.message);
+        return {
+            numero: null,
+            codigoVerificacao: null,
+            dataEmissao: null,
+            valorLiquidoNfse: null,
+            outrasInformacoes: null,
+            chaveAcesso: null
+        };
+    }
+}
+
+/**
+ * Gera XML da NFE/NFSE
+ * @param {number} idConta - ID da conta
+ * @returns {Promise<Object>} Dados da nota em base64 com informações extraídas
+ */
+async function geraNotaXML(idConta) {
+    console.log('🔄 geraNotaXML - Iniciando:', idConta);
+
+    try {
+        // Fazer requisição para obter o XML
+        const response = await apiClient({
+            method: 'GET',
+            url: '/comercial/notaFiscalServico/XML',
+            params: { id: idConta },
+            validateStatus: function (status) {
+                // Aceitar qualquer status para tratar manualmente
+                return status >= 200 && status < 600;
+            }
+        });
+
+        console.log('📊 Status da resposta:', response.status);
+        console.log('📊 Content-Type:', response.headers['content-type']);
+
+        // Se o status não for 200, retornar erro
+        if (response.status !== 200) {
+            let errorMessage = response.data?.message || 'Erro ao gerar nota';
+            console.log('❌ Erro na requisição:', errorMessage);
+
+            return {
+                success: false,
+                error: errorMessage,
+                data: null
+            };
+        }
+
+        // Verificar se a resposta tem a estrutura esperada
+        if (!response.data || !response.data.success || !response.data.data || response.data.data.length === 0) {
+            console.log('❌ Resposta sem dados válidos');
+            return {
+                success: false,
+                error: 'Nota fiscal não encontrada',
+                data: null
+            };
+        }
+
+        // Extrair o XML do campo xml
+        const xmlString = response.data.data[0].xml;
+
+        if (!xmlString) {
+            console.log('❌ Campo XML não encontrado na resposta');
+            return {
+                success: false,
+                error: 'XML não encontrado na resposta',
+                data: null
+            };
+        }
+
+        // Verificar se o XML é válido (deve começar com < ou <?xml)
+        const xmlHeader = xmlString.trim().substring(0, 5);
+        if (!xmlHeader.startsWith('<?xml') && !xmlHeader.startsWith('<')) {
+            console.log('❌ Dados recebidos não são um XML válido');
+            return {
+                success: false,
+                error: 'Dados recebidos não são um XML válido',
+                data: null
+            };
+        }
+
+        // Converter XML para base64
+        const base64 = Buffer.from(xmlString, 'utf-8').toString('base64');
+
+        // Fazer parsing do XML para extrair informações
+        const dadosNota = parseNotaFiscalXML(xmlString);
+
+        console.log('✅ Nota XML gerada com sucesso!');
+        console.log('Tamanho:', xmlString.length, 'bytes');
+        console.log('Número:', dadosNota.numero);
+        console.log('Código Verificação:', dadosNota.codigoVerificacao);
+        console.log('Data Emissão:', dadosNota.dataEmissao);
+        console.log('Valor Líquido:', dadosNota.valorLiquidoNfse);
+        console.log('Chave de Acesso:', dadosNota.chaveAcesso);
+
+        return {
+            success: true,
+            data: {
+                base64: base64,
+                xmlString: xmlString, // XML completo como string
+                filename: `${dadosNota.numero}-${dadosNota.codigoVerificacao}.xml`,
+                // Dados extraídos do XML para WhatsApp
+                numero: dadosNota.numero,
+                codigoVerificacao: dadosNota.codigoVerificacao,
+                dataEmissao: dadosNota.dataEmissao,
+                valorLiquidoNfse: dadosNota.valorLiquidoNfse,
+                chaveAcesso: dadosNota.chaveAcesso,
+                outrasInformacoes: dadosNota.outrasInformacoes
+            },
+            error: null
+        };
+
+    } catch (error) {
+        console.error('❌ Erro ao gerar nota XML:', error.message);
+
+        return {
+            success: false,
+            error: error.message || 'Erro ao gerar nota',
+            data: null
+        };
+    }
+}
+
+
 /**
  * Testa conexão com a API externa
  * @returns {Promise} Status da conexão
@@ -703,6 +934,8 @@ module.exports = {
     getBoletosByCNPJ,
     geraBoletoPDF,
     geraBoletoData,
+    getNotaByCNPJ,
+    geraNotaXML,
     testConnection,
     validarBloqueio,
     validarPermissaoFaturamento,
