@@ -36,15 +36,35 @@ const OPCOES_MEGAZAP = {
 };
 
 /**
- * Formata data do ERP (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
- * @param {string} dataERP - Data no formato YYYY-MM-DD
+ * Formata data Boleto ERP
+ * @param {string} dataERP - Data no formato (DD-MM-YYYY H:I:S)
  * @returns {string} Data no formato DD/MM/YYYY
  */
-function formatarDataERP(dataERP) {
+function formatarDataBoletoERP(dataERP) {
     if (!dataERP) return 'Data não disponível';
 
     try {
-        const [ano, mes, dia] = dataERP.split('-');
+        // Remover a parte da hora (tudo após o espaço) antes de fazer o split
+        const data = dataERP.split(' ')[0];
+        const [dia, mes, ano] = data.split('-');
+        return `${dia}/${mes}/${ano}`;
+    } catch (error) {
+        console.error('Erro ao formatar data:', error);
+        return dataERP;
+    }
+}
+
+/**
+ * Formata data NFE ERP
+ * @param {string} dataERP - Data no formato (YYYY-MM-DD H:I:S)
+ * @returns {string} Data no formato DD/MM/YYYY
+ */
+function formatarDataNfeERP(dataERP) {
+    if (!dataERP) return 'Data não disponível';
+
+    try {
+        const data = dataERP.split('T')[0];
+        const [ano, mes, dia] = data.split('-');
         return `${dia}/${mes}/${ano}`;
     } catch (error) {
         console.error('Erro ao formatar data:', error);
@@ -357,7 +377,7 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
 
         // Adicionar informações do boleto na mensagem
         mensagem += `*Boleto: ${boleto.numeroDocumento}*\n`;
-        mensagem += `*Vencimento:* ${formatarDataERP(boleto.dataVencimento)}\n`;
+        mensagem += `*Vencimento:* ${formatarDataBoletoERP(boleto.dataVencimento)}\n`;
         mensagem += `*Valor:* R$ ${boleto.valor.toFixed(2)} (até o vencimento)\n`;
 
         // Gerar PDF do boleto
@@ -579,9 +599,9 @@ async function gerarRespostaNotaFiscalUnificada(telefone, notas, cliente) {
         console.log(`[MEGAZAP] Processando nota: ${nota.numero}`);
 
         // Adicionar informações da nota na mensagem
-        mensagem += `📄 *Nota Fiscal*\n`;
+        mensagem += `*Nota Fiscal*\n`;
         mensagem += `*Número:* ${nota.numero}\n`;
-        mensagem += `*Emissão:* ${formatarDataERP(nota.dataEmissao)}\n`;
+        mensagem += `*Emissão:* ${formatarDataNfeERP(nota.dataEmissao)}\n`;
 
         // Validar e formatar valor
         if (nota.valorLiquidoNfse) {

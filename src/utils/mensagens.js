@@ -196,11 +196,11 @@ function mensagemBoleto(boleto) {
  * @returns {string} Mensagem formatada
  */
 function mensagemNFE(nfe) {
-    return `📄 *Nota Fiscal #${nfe.numero}*\n` +
-           `📅 Data: ${nfe.dataEmissao}\n` +
-           `💰 Valor: ${nfe.valor}\n\n` +
-           `🔢 Código:\n${nfe.codigo}\n\n` +
-           `🔗 Link:\n${nfe.url}`;
+    return `*Nota Fiscal #${nfe.numero}*\n` +
+           `Data: ${nfe.dataEmissao}\n` +
+           `Valor: ${nfe.valor}\n\n` +
+           `Código:\n${nfe.codigo}\n\n` +
+           `Link:\n${nfe.url}`;
 }
 
 /**

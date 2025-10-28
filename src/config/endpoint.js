@@ -618,8 +618,8 @@ async function geraBoletoPDF(idConta) {
             };
         }
 
-        console.log('✅ Boleto PDF gerado com sucesso!');
-        console.log('📄 Tamanho:', response.data.length, 'bytes');
+        console.log('Boleto PDF gerado com sucesso!');
+        console.log('Tamanho:', response.data.length, 'bytes');
 
         return {
             success: true,
