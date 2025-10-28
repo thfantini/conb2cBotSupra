@@ -11,6 +11,7 @@ const webhookRoutes = require('./routes/webhook');
 const webhookGroupRoutes = require('./routes/webhookGroup');
 const webhookMessageRoutes = require('./routes/webhookMessage');
 const qrcodeRoutes = require('./routes/qrcode');
+const tokenRoutes = require('./routes/token');
 
 // Cron:
 const scheduledRoutes = require('./modules/scheduled-messages/routes/scheduled');
@@ -64,6 +65,9 @@ class WhatsAppBot {
 
             // Inicializar automação de mensagens programadas
             await this.initializeScheduledMessages();
+
+            // Inicializar renovação automática de token ERP
+            await this.initializeTokenRenewal();
 
             // Inicia servidor
             await this.startServer();
@@ -181,6 +185,8 @@ class WhatsAppBot {
                 endpoints: {
                     webhook: '/webhook',
                     qrcode: '/qrcode',
+                    token: '/token',
+                    scheduled: '/scheduled',
                     health: '/health',
                     info: '/info'
                 }
@@ -198,6 +204,9 @@ class WhatsAppBot {
 
         // Rotas de QR Code
         this.app.use('/qrcode', qrcodeRoutes);
+
+        // Rotas de gerenciamento de token ERP
+        this.app.use('/token', tokenRoutes);
 
         // Rotas CRON (micro-serviço)
         this.app.use('/scheduled', scheduledRoutes);
@@ -240,16 +249,16 @@ class WhatsAppBot {
      */
     async initializeScheduledMessages() {
         try {
-            logger.info('🤖 Inicializando sistema de mensagens programadas...', { 
-                context: 'scheduled-messages' 
+            logger.info('🤖 Inicializando sistema de mensagens programadas...', {
+                context: 'scheduled-messages'
             });
 
             // Importar aqui para evitar carregamento desnecessário se desabilitado
             const scheduledCron = require('./modules/scheduled-messages/cron/scheduledCron');
-            
+
             // A automação já se auto-inicializa, mas podemos fazer verificações
             const cronStatus = scheduledCron.getStatus();
-            
+
             if (cronStatus.isRunning) {
                 logger.info('✅ Automação de mensagens programadas ativa', {
                     context: 'scheduled-messages',
@@ -268,10 +277,49 @@ class WhatsAppBot {
                 context: 'scheduled-messages',
                 error: error.message
             });
-            
+
             // Não falhar a aplicação se o módulo de mensagens programadas tiver problema
             logger.warn('⚠️ Aplicação continuará sem mensagens programadas', {
                 context: 'scheduled-messages'
+            });
+        }
+    }
+
+    /**
+     * Inicializa o sistema de renovação automática de token ERP
+     */
+    async initializeTokenRenewal() {
+        try {
+            logger.info('🔑 Inicializando sistema de renovação automática de token ERP...', {
+                context: 'token-renewal'
+            });
+
+            const scheduledTokenService = require('./services/scheduledTokenService');
+
+            // Iniciar o serviço de renovação
+            const started = scheduledTokenService.iniciar();
+
+            if (started) {
+                const status = scheduledTokenService.obterStatus();
+                logger.info('✅ Serviço de renovação de token ERP ativo', {
+                    context: 'token-renewal',
+                    nextExecution: status.nextExecution,
+                    lastExecution: status.lastExecution
+                });
+            } else {
+                logger.warn('⚠️ Serviço de renovação de token ERP não foi iniciado', {
+                    context: 'token-renewal'
+                });
+            }
+
+        } catch (error) {
+            logger.error('❌ Erro ao inicializar renovação de token', {
+                context: 'token-renewal',
+                error: error.message
+            });
+
+            logger.warn('⚠️ Aplicação continuará sem renovação automática de token', {
+                context: 'token-renewal'
             });
         }
     }
@@ -436,8 +484,17 @@ class WhatsAppBot {
                 const scheduledCron = require('./modules/scheduled-messages/cron/scheduledCron');
                 scheduledCron.stop();
                 logger.info('✅ Automação de mensagens programadas parada', { context: 'shutdown' });
-                } catch (error) {
+            } catch (error) {
                 logger.warn('⚠️ Erro ao parar automação:', error.message);
+            }
+
+            // Parar renovação automática de token
+            try {
+                const scheduledTokenService = require('./services/scheduledTokenService');
+                scheduledTokenService.parar();
+                logger.info('✅ Serviço de renovação de token parado', { context: 'shutdown' });
+            } catch (error) {
+                logger.warn('⚠️ Erro ao parar renovação de token:', error.message);
             }
             
             // Para de aceitar novas conexões

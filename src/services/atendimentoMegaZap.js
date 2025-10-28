@@ -380,6 +380,11 @@ async function gerarRespostaBoletosUnificada(telefone, boletos, cliente) {
         mensagem += `*Vencimento:* ${formatarDataBoletoERP(boleto.dataVencimento)}\n`;
         mensagem += `*Valor:* R$ ${boleto.valor.toFixed(2)} (até o vencimento)\n`;
 
+        //Verifica Linha Digitavel
+        if(boleto.linhaDigitavelBoleto){
+            mensagem += `*Linha Digitável:*\n\n${boleto.linhaDigitavelBoleto}\n`;
+        }
+
         // Gerar PDF do boleto
         const boletoPDF = await endpoint.geraBoletoPDF(boleto.idConta);
 

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const https = require('https');
 const axios = require('axios');
+const tokenManager = require('../services/tokenManagerService');
 
 /**
  * Configuração para aceitar certificados SSL auto-assinados
@@ -12,6 +13,30 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const httpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
+
+/**
+ * Obtém o token de autorização (do arquivo ou fallback para .env)
+ * @returns {Promise<string>} Token de autorização
+ */
+async function obterTokenAutorizacao() {
+    try {
+        // Tentar ler do arquivo primeiro
+        const token = await tokenManager.obterTokenAtual();
+
+        if (token) {
+            console.log('✅ Usando token do arquivo físico');
+            return token;
+        }
+
+        // Fallback para .env se não encontrar no arquivo
+        console.log('⚠️ Token do arquivo não encontrado, usando .env como fallback');
+        return process.env.API_BEARER_TOKEN;
+
+    } catch (error) {
+        console.warn('⚠️ Erro ao obter token do arquivo, usando .env como fallback:', error.message);
+        return process.env.API_BEARER_TOKEN;
+    }
+}
 
 /**
  * Configuração do cliente HTTP para APIs externas
@@ -30,6 +55,23 @@ const apiConfig = {
  * Cliente HTTP configurado
  */
 const apiClient = axios.create(apiConfig);
+
+// Interceptor para atualizar o token dinamicamente antes de cada requisição
+apiClient.interceptors.request.use(
+    async (config) => {
+        // Obter token atualizado do arquivo (ou fallback para .env)
+        const token = await obterTokenAutorizacao();
+
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
 
 /*
     // Ignorar SSL em desenvolvimento (ADICIONAR AQUI)
@@ -912,6 +954,82 @@ async function geraNotaXML(idConta) {
 
 
 /**
+ * Gera novo token ERP
+ * @returns {Promise<Object>} Token e dados de validade
+ */
+async function gerarTokenERP() {
+    console.log('🔄 gerarTokenERP - Iniciando...');
+
+    try {
+        // Buscar credenciais do .env
+        const login = process.env.API_USER_TOKEN;
+        const senha = process.env.API_PASS_TOKEN;
+
+        if (!login || !senha) {
+            throw new Error('Credenciais API_USER_TOKEN ou API_PASS_TOKEN não configuradas no .env');
+        }
+
+        // Fazer requisição para gerar token
+        const response = await apiClient({
+            method: 'POST',
+            url: '/cadastro/usuario/token',
+            data: {
+                login: login,
+                senha: senha
+            }
+        });
+
+        console.log('📊 Status da resposta:', response.status);
+
+        // Verificar se o status não for 200
+        if (response.status !== 200) {
+            throw new Error('Erro ao gerar token ERP');
+        }
+
+        // Validar estrutura da resposta
+        if (!response.data || !response.data.success) {
+            throw new Error('Resposta inválida do servidor');
+        }
+
+        const { token, dataValidade, data } = response.data;
+
+        // Validar dados essenciais
+        if (!token || !dataValidade) {
+            throw new Error('Token ou data de validade não retornados');
+        }
+
+        console.log('✅ Token ERP gerado com sucesso!');
+        console.log('Token:', token);
+        console.log('Data de Validade:', dataValidade);
+
+        return {
+            success: true,
+            data: {
+                token: token,
+                dataValidade: dataValidade,
+                dataValidadeToken: data && data[0] ? data[0].dataValidadeToken : dataValidade,
+                appVersion: response.data.appVersion,
+                usuario: data && data[0] ? {
+                    nome: data[0].nome,
+                    login: data[0].login,
+                    id: data[0].id
+                } : null
+            },
+            error: null
+        };
+
+    } catch (error) {
+        console.error('❌ Erro ao gerar token ERP:', error.message);
+
+        return {
+            success: false,
+            data: null,
+            error: error.message || 'Erro ao gerar token ERP'
+        };
+    }
+}
+
+/**
  * Testa conexão com a API externa
  * @returns {Promise} Status da conexão
  */
@@ -936,6 +1054,7 @@ module.exports = {
     geraBoletoData,
     getNotaByCNPJ,
     geraNotaXML,
+    gerarTokenERP,
     testConnection,
     validarBloqueio,
     validarPermissaoFaturamento,
