@@ -426,6 +426,56 @@ function validarPermissaoFaturamento(clienteData, telefone) {
 }
 
 /**
+ * Processa contatos de múltiplas empresas e valida permissões
+ * @param {Array} empresas - Array de empresas válidas (não bloqueadas)
+ * @param {string} celular - Número do celular para validação
+ * @returns {Promise<Array>} Array de empresas com contatos válidos
+ */
+async function processaContatos(empresas, celular) {
+    console.log(`🔍 [PROCESSA CONTATOS] Iniciando validação de ${empresas.length} empresa(s)`);
+
+    const empresasComContatosValidos = [];
+
+    for (const empresa of empresas) {
+        console.log(`\n📋 [PROCESSA CONTATOS] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
+
+        // Verificar se a empresa tem contatos
+        if (!empresa.contatos || !Array.isArray(empresa.contatos) || empresa.contatos.length === 0) {
+            console.log(`⚠️ [PROCESSA CONTATOS] Empresa ${empresa.nome} não possui contatos`);
+            continue;
+        }
+
+        console.log(`📞 [PROCESSA CONTATOS] Empresa possui ${empresa.contatos.length} contato(s)`);
+
+        // Criar estrutura temporária para validação de permissão
+        const dataTemp = { data: [empresa] };
+        const permissaoStatus = validarPermissaoFaturamento(dataTemp, celular);
+
+        if (permissaoStatus.hasPermission && permissaoStatus.contato) {
+            console.log(`✅ [PROCESSA CONTATOS] Contato válido encontrado: ${permissaoStatus.contato.nome}`);
+            console.log(`   - Telefone: ${permissaoStatus.contato.numero}`);
+            console.log(`   - Autoriza Faturamento: ${permissaoStatus.contato.autorizaFaturamento}`);
+
+            // Adicionar empresa com apenas o contato válido
+            empresasComContatosValidos.push({
+                id: empresa.id,
+                nome: empresa.nome,
+                nomeFantasia: empresa.nomeFantasia,
+                cpfCnpj: empresa.cpfCnpj,
+                contatos: [permissaoStatus.contato] // Apenas o contato válido
+            });
+        } else {
+            console.log(`❌ [PROCESSA CONTATOS] Nenhum contato válido para empresa ${empresa.nome}`);
+            console.log(`   - Motivo: ${permissaoStatus.message || 'Sem permissão de faturamento'}`);
+        }
+    }
+
+    console.log(`\n🎯 [PROCESSA CONTATOS] Resultado: ${empresasComContatosValidos.length} empresa(s) com contatos válidos`);
+
+    return empresasComContatosValidos;
+}
+
+/**
  * Busca cliente por número de celular
  * @param {string} celular - Número do celular
  * @returns {Promise} Dados do cliente com validações
@@ -447,42 +497,81 @@ async function getClienteByCelular(celular) {
     console.log('----- result: ', result.success);
     console.log('----- data: ', result.data);
 
-    // Validação de bloqueio
-    const bloqueioStatus = validarBloqueio(result.data);
-    if (bloqueioStatus.blocked) {
-        console.log('Validação de bloqueio');
+    // Filtrar apenas empresas que possuem CNPJ válido
+    if (result.data && result.data.data && Array.isArray(result.data.data)) {
+        const empresasOriginais = result.data.data.length;
+        result.data.data = result.data.data.filter(empresa =>
+            empresa.cpfCnpj && empresa.cpfCnpj.trim() !== ''
+        );
+        console.log(`🔍 [VALIDAÇÃO CNPJ] Empresas antes do filtro: ${empresasOriginais}, após filtro: ${result.data.data.length}`);
+
+        // Se não houver empresas com CNPJ após o filtro
+        if (result.data.data.length === 0) {
+            console.log('⚠️ [VALIDAÇÃO CNPJ] Nenhuma empresa com CNPJ válido encontrada');
+            return {
+                success: false,
+                data: result.data,
+                error: 'Nenhuma empresa com CNPJ válido foi encontrada para este telefone.',
+                blocked: false,
+                hasPermission: false
+            };
+        }
+    }
+
+    // Validação de bloqueio e filtrar empresas válidas (não bloqueadas)
+    const empresasValidas = [];
+
+    for (const empresa of result.data.data) {
+        // Criar estrutura temporária para validação de bloqueio
+        const dataTemp = { data: [empresa] };
+        const bloqueioStatus = validarBloqueio(dataTemp);
+
+        if (!bloqueioStatus.blocked) {
+            empresasValidas.push(empresa);
+            console.log(`✅ [VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Não bloqueada`);
+        } else {
+            console.log(`❌ [VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Bloqueada: ${bloqueioStatus.message}`);
+        }
+    }
+
+    // Se não houver empresas válidas após filtro de bloqueio
+    if (empresasValidas.length === 0) {
+        console.log('⚠️ [VALIDAÇÃO BLOQUEIO] Todas as empresas estão bloqueadas');
         return {
             success: false,
             data: result.data,
-            error: bloqueioStatus.message,
+            error: 'Todas as empresas associadas a este telefone estão bloqueadas.',
             blocked: true,
             hasPermission: false
         };
     }
 
-    // Validação de permissão de faturamento
-    const permissaoStatus = validarPermissaoFaturamento(result.data, celularSemDDI);
-    if (!permissaoStatus.hasPermission) {
-        console.log('validarPermissaoFaturamento');
+    console.log(`🔍 [VALIDAÇÃO BLOQUEIO] Empresas válidas (não bloqueadas): ${empresasValidas.length}`);
+
+    // Processar contatos das empresas válidas
+    const empresasComContatos = await processaContatos(empresasValidas, celularSemDDI);
+
+    // Se nenhuma empresa tem contato válido
+    if (empresasComContatos.length === 0) {
+        console.log('⚠️ [VALIDAÇÃO CONTATOS] Nenhum contato válido encontrado');
         return {
             success: false,
             data: result.data,
-            error: permissaoStatus.message,
+            error: 'Nenhum contato autorizado para faturamento foi encontrado.',
             blocked: false,
-            hasPermission: false,
-            contato: permissaoStatus.contato
+            hasPermission: false
         };
     }
 
-    // Cliente válido e autorizado
-    console.log('Cliente válido e autorizado: true');
+    // Cliente válido e autorizado com múltiplas empresas
+    console.log(`✅ [VALIDAÇÃO] ${empresasComContatos.length} empresa(s) válida(s) com contatos autorizados`);
+
     return {
         success: true,
-        data: result.data,
+        data: empresasComContatos, // Array de empresas com contatos válidos
         error: null,
         blocked: false,
-        hasPermission: true,
-        contato: permissaoStatus.contato
+        hasPermission: true
     };
 }
 
@@ -542,9 +631,10 @@ async function getClienteByCNPJ(cpfCnpj) {
 async function getBoletosByCNPJ(idParceiro) {
     console.log('getBoletosByCNPJ:', idParceiro);
 
-    //Mock ( Cliente Supra > Cliente: BNT BUSINESS )
-    if(idParceiro==724){
-        idParceiro = 2136;
+    //Mock ( Cliente Supra )
+    if(idParceiro==724 || idParceiro==257){
+        idParceiro = 2136; //BNT BUSINESS
+        idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
     }
 
     const result = await executeRequest('GET', '/financeiro/parcelas', {
@@ -722,12 +812,48 @@ async function geraBoletoData(idConta) {
     };
 }
 
+async function getNotaByCNPJ(idParceiro) {
+    console.log('getNotaByCNPJ:', idParceiro);
+
+    //Mock ( Cliente Supra )
+    if(idParceiro==724 || idParceiro==257){
+        idParceiro = 2136; //BNT BUSINESS
+        idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
+    }
+
+    const result = await executeRequest('GET', '/financeiro/parcelas', {
+        params: {
+            max: 10,
+            consolidada: false,
+            contaPagarReceber: 'RECEBER',
+            idParceiro: idParceiro,
+            idsSituacaoDocumento: '[1,2]',
+            quitada: false
+        }
+    });
+
+    if (!result.success) {
+        return result;
+    }
+
+    //Sem Resultados
+    if (!result.data.data) {
+        return result;
+    }
+
+    return {
+        success: true,
+        data: result.data.data || [],
+        error: null
+    };
+}
+
 
 /**
  * Busca notas fiscais por ID do parceiro (CNPJ)
  * @param {number} idParceiro - ID do parceiro
  * @returns {Promise} Lista de notas fiscais
- */
+
 async function getNotaByCNPJ(idParceiro) {
     console.log('getNotaByCNPJ:', idParceiro);
 
@@ -765,7 +891,7 @@ async function getNotaByCNPJ(idParceiro) {
         error: null
     };
 }
-
+*/
 
 
 /**
@@ -1058,5 +1184,6 @@ module.exports = {
     testConnection,
     validarBloqueio,
     validarPermissaoFaturamento,
+    processaContatos,
     buscarTelefoneCliente
 };
