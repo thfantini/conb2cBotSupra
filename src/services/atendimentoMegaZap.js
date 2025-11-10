@@ -196,7 +196,7 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
 
     // Se não há ação identificada, retornar Menu
     if (!acao) {
-        console.log('❌ [MEGAZAP] Nenhuma ação identificada');
+        console.log('[MEGAZAP] Nenhuma ação identificada');
         
         // Menu MegaZap
         const menu = getMenu(telefone, messageId);
@@ -227,7 +227,7 @@ async function fluxoAtendimentoMegazap(telefone, mensagem, messageId, megazapDat
         default:
             return await messageService.sendTextMessage(
                 telefone,
-                '❌ Opção não implementada ainda.'
+                'Opção não implementada ainda.'
             );
     }
 }
@@ -251,28 +251,28 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
 
     // 2. Validar cliente bloqueado
     if (clienteAPI.blocked) {
-        console.log('❌ [MEGAZAP] Cliente bloqueado');
+        console.log('[MEGAZAP] Cliente bloqueado');
         return await messageService.sendTextMessage(
             telefone,
-            clienteAPI.error || '❌ Seu acesso está bloqueado. Entre em contato com o suporte.'
+            clienteAPI.error || 'Seu acesso está bloqueado. Entre em contato com o suporte.'
         );
     }
 
     // 3. Validar cliente não encontrado ou sem permissão
     if (!clienteAPI.success || !clienteAPI.hasPermission) {
-        console.log('⚠️ [MEGAZAP] Cliente sem permissão');
+        console.log('[MEGAZAP] Cliente sem permissão');
         const mensagemErro = clienteAPI.error ||
-            '❌ Telefone não autorizado. Entre em contato com o suporte para liberar seu acesso.';
+            'Telefone não autorizado. Entre em contato com o suporte para liberar seu acesso.';
 
         return await messageService.sendTextMessage(telefone, mensagemErro);
     }
 
     // 4. Validar estrutura de dados
     if (!clienteAPI.data || !Array.isArray(clienteAPI.data) || clienteAPI.data.length === 0) {
-        console.log('⚠️ [MEGAZAP] Nenhuma empresa válida encontrada');
+        console.log('[MEGAZAP] Nenhuma empresa válida encontrada');
         return await messageService.sendTextMessage(
             telefone,
-            '❌ Nenhuma empresa encontrada. Entre em contato com o suporte.'
+            'Nenhuma empresa encontrada. Entre em contato com o suporte.'
         );
     }
 
@@ -287,19 +287,19 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
     const empresasComBoletos = [];
 
     for (const empresa of empresas) {
-        console.log(`\n📋 [MEGAZAP] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
+        console.log(`\n[MEGAZAP] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
 
         const boletos = await endpoint.getBoletosByCNPJ(empresa.id);
 
         if (boletos.success && boletos.data && boletos.data.length > 0) {
-            console.log(`✅ [MEGAZAP] ${boletos.data.length} boleto(s) encontrado(s) para ${empresa.nome}`);
+            console.log(`[MEGAZAP] ${boletos.data.length} boleto(s) encontrado(s) para ${empresa.nome}`);
 
             empresasComBoletos.push({
                 ...empresa,
                 boletos: boletos.data
             });
         } else {
-            console.log(`⚠️ [MEGAZAP] Nenhum boleto encontrado para ${empresa.nome}`);
+            console.log(`[MEGAZAP] Nenhum boleto encontrado para ${empresa.nome}`);
         }
     }
 
@@ -312,7 +312,7 @@ async function processarFluxoBoleto(telefone, mensagem, messageId, megazapData, 
         );
     }
 
-    console.log(`\n🎯 [MEGAZAP] Total: ${empresasComBoletos.length} empresa(s) com boletos`);
+    console.log(`\n[MEGAZAP] Total: ${empresasComBoletos.length} empresa(s) com boletos`);
 
     // Salvar no estado
     estado.empresas = empresasComBoletos;
@@ -344,18 +344,18 @@ async function gerarRespostaBoletosUnificada(telefone, empresasComBoletos) {
 
     // Processar cada empresa
     for (const empresa of empresasComBoletos) {
-        console.log(`\n📋 [MEGAZAP] Processando empresa: ${empresa.nome}`);
+        console.log(`\n[MEGAZAP] Processando empresa: ${empresa.nome}`);
         console.log(`   - Boletos: ${empresa.boletos.length}`);
 
         // Adicionar nome da empresa na mensagem
         mensagem += `━━━━━━━━━━━━━━━━━━━━━━\n`;
-        mensagem += `🏢 *${empresa.nomeFantasia || empresa.nome}*\n`;
-        mensagem += `📄 CNPJ: ${empresa.cpfCnpj}\n`;
+        mensagem += `*${empresa.nomeFantasia || empresa.nome}*\n`;
+        mensagem += `CNPJ: ${empresa.cpfCnpj}\n`;
         mensagem += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
         // Processar cada boleto da empresa
         for (const boleto of empresa.boletos) {
-            console.log(`   📄 Processando boleto: ${boleto.numeroDocumento}`);
+            console.log(`Processando boleto: ${boleto.numeroDocumento}`);
 
             // Adicionar informações do boleto na mensagem
             mensagem += `*Boleto: ${boleto.numeroDocumento}*\n`;
@@ -371,10 +371,10 @@ async function gerarRespostaBoletosUnificada(telefone, empresasComBoletos) {
             const boletoPDF = await endpoint.geraBoletoPDF(boleto.idConta);
 
             if (!boletoPDF.success) {
-                console.error(`   ❌ Erro ao gerar PDF do boleto ${boleto.numeroDocumento}`);
-                mensagem += `⚠️ Não foi possível gerar o PDF deste boleto.\n`;
+                console.error(`Erro ao gerar PDF do boleto ${boleto.numeroDocumento}`);
+                mensagem += `Não foi possível gerar o PDF deste boleto.\n`;
             } else {
-                console.log(`   ✅ PDF gerado para boleto ${boleto.numeroDocumento}`);
+                console.log(`PDF gerado para boleto ${boleto.numeroDocumento}`);
 
                 // Limpar base64
                 const base64Clean = boletoPDF.data.base64
@@ -402,14 +402,14 @@ async function gerarRespostaBoletosUnificada(telefone, empresasComBoletos) {
 
     mensagem += 'Posso te ajudar com algo mais?';
 
-    console.log(`\n🎯 [MEGAZAP] Resumo:`);
+    console.log(`\n[MEGAZAP] Resumo:`);
     console.log(`   - Empresas processadas: ${empresasComBoletos.length}`);
     console.log(`   - Total de boletos: ${totalBoletos}`);
     console.log(`   - Total de PDFs gerados: ${attachments.length}`);
 
     // Se não há anexos (nenhum PDF foi gerado), enviar apenas texto
     if (attachments.length === 0) {
-        console.log('⚠️ [MEGAZAP] Nenhum PDF gerado, enviando apenas texto');
+        console.log('[MEGAZAP] Nenhum PDF gerado, enviando apenas texto');
         return await messageService.sendTextMessage(telefone, mensagem);
     }
 
@@ -453,28 +453,28 @@ async function processarFluxoNotaFiscal(telefone, mensagem, messageId, megazapDa
 
     // 2. Validar cliente bloqueado
     if (clienteAPI.blocked) {
-        console.log('❌ [MEGAZAP] Cliente bloqueado');
+        console.log('[MEGAZAP] Cliente bloqueado');
         return await messageService.sendTextMessage(
             telefone,
-            clienteAPI.error || '❌ Seu acesso está bloqueado. Entre em contato com o suporte.'
+            clienteAPI.error || 'Seu acesso está bloqueado. Entre em contato com o suporte.'
         );
     }
 
     // 3. Validar cliente não encontrado ou sem permissão
     if (!clienteAPI.success || !clienteAPI.hasPermission) {
-        console.log('⚠️ [MEGAZAP] Cliente sem permissão');
+        console.log('[MEGAZAP] Cliente sem permissão');
         const mensagemErro = clienteAPI.error ||
-            '❌ Telefone não autorizado. Entre em contato com o suporte para liberar seu acesso.';
+            'Telefone não autorizado. Entre em contato com o suporte para liberar seu acesso.';
 
         return await messageService.sendTextMessage(telefone, mensagemErro);
     }
 
     // 4. Validar estrutura de dados
     if (!clienteAPI.data || !Array.isArray(clienteAPI.data) || clienteAPI.data.length === 0) {
-        console.log('⚠️ [MEGAZAP] Nenhuma empresa válida encontrada');
+        console.log('[MEGAZAP] Nenhuma empresa válida encontrada');
         return await messageService.sendTextMessage(
             telefone,
-            '❌ Nenhuma empresa encontrada. Entre em contato com o suporte.'
+            'Nenhuma empresa encontrada. Entre em contato com o suporte.'
         );
     }
 
@@ -489,19 +489,19 @@ async function processarFluxoNotaFiscal(telefone, mensagem, messageId, megazapDa
     const empresasComNotas = [];
 
     for (const empresa of empresas) {
-        console.log(`\n📋 [MEGAZAP] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
+        console.log(`\n[MEGAZAP] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
 
         const notas = await endpoint.getNotaByCNPJ(empresa.id);
 
         if (notas.success && notas.data && notas.data.length > 0) {
-            console.log(`✅ [MEGAZAP] ${notas.data.length} nota(s) encontrado(s) para ${empresa.nome}`);
+            console.log(`[MEGAZAP] ${notas.data.length} nota(s) encontrado(s) para ${empresa.nome}`);
 
             empresasComNotas.push({
                 ...empresa,
                 notas: notas.data
             });
         } else {
-            console.log(`⚠️ [MEGAZAP] Nenhum nota encontrado para ${empresa.nome}`);
+            console.log(`[MEGAZAP] Nenhum nota encontrado para ${empresa.nome}`);
         }
     }
 
@@ -514,7 +514,7 @@ async function processarFluxoNotaFiscal(telefone, mensagem, messageId, megazapDa
         );
     }
 
-    console.log(`\n🎯 [MEGAZAP] Total: ${empresasComNotas.length} empresa(s) com notas`);
+    console.log(`\n[MEGAZAP] Total: ${empresasComNotas.length} empresa(s) com notas`);
 
     // Salvar no estado
     estado.empresas = empresasComNotas;
@@ -546,22 +546,22 @@ async function gerarRespostaNotaFiscalUnificada(telefone, empresasComNotas) {
 
     // Processar cada empresa
     for (const empresa of empresasComNotas) {
-        console.log(`\n📋 [MEGAZAP] Processando empresa: ${empresa.nome}`);
+        console.log(`\n[MEGAZAP] Processando empresa: ${empresa.nome}`);
         console.log(`   - Notas: ${empresa.notas.length}`);
 
         // Adicionar nome da empresa na mensagem
         mensagem += `━━━━━━━━━━━━━━━━━━━━━━\n`;
-        mensagem += `🏢 *${empresa.nomeFantasia || empresa.nome}*\n`;
-        mensagem += `📄 CNPJ: ${empresa.cpfCnpj}\n`;
+        mensagem += `*${empresa.nomeFantasia || empresa.nome}*\n`;
+        mensagem += `CNPJ: ${empresa.cpfCnpj}\n`;
         mensagem += `━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
         // Processar cada nota da empresa
         for (const nota of empresa.notas) {
-            console.log(`   📄 Processando nota com ID: ${nota.idNotaFiscalServico || 'não informado'}`);
+            console.log(`Processando nota com ID: ${nota.idNotaFiscalServico || 'não informado'}`);
 
             // Verificar se nota tem idNotaFiscalServico
             if (!nota.idNotaFiscalServico) {
-                console.log(`   ⚠️ Nota sem idNotaFiscalServico - pulando`);
+                console.log(`Nota sem idNotaFiscalServico - pulando`);
                 continue; // Pula notas sem ID
             }
 
@@ -569,13 +569,13 @@ async function gerarRespostaNotaFiscalUnificada(telefone, empresasComNotas) {
             const notaXML = await endpoint.geraNotaXML(nota.idNotaFiscalServico);
 
             if (!notaXML.success || !notaXML.data) {
-                console.error(`   ❌ Erro ao gerar XML da nota ID ${nota.idNotaFiscalServico}`);
-                mensagem += `⚠️ Não foi possível gerar o XML desta nota.\n\n`;
+                console.error(`Erro ao gerar XML da nota ID ${nota.idNotaFiscalServico}`);
+                mensagem += `Não foi possível gerar o XML desta nota.\n\n`;
                 continue;
             }
 
             const notaData = notaXML.data;
-            console.log(`   ✅ XML gerado para nota ${notaData.numero || 'N/A'}`);
+            console.log(`XML gerado para nota ${notaData.numero || 'N/A'}`);
 
             // Adicionar informações da nota na mensagem (dados vindos do XML)
             mensagem += `*Nota Fiscal*\n`;
@@ -598,10 +598,10 @@ async function gerarRespostaNotaFiscalUnificada(telefone, empresasComNotas) {
 
             // Verificar se existe base64 do XML
             if (!notaData.base64) {
-                console.error(`   ❌ XML sem base64 para nota ${notaData.numero}`);
-                mensagem += `⚠️ Não foi possível obter o arquivo XML.\n`;
+                console.error(`XML sem base64 para nota ${notaData.numero}`);
+                mensagem += `Não foi possível obter o arquivo XML.\n`;
             } else {
-                console.log(`   ✅ Base64 disponível para nota ${notaData.numero}`);
+                console.log(`Base64 disponível para nota ${notaData.numero}`);
 
                 // Limpar base64
                 const base64Clean = notaData.base64
@@ -629,14 +629,14 @@ async function gerarRespostaNotaFiscalUnificada(telefone, empresasComNotas) {
 
     mensagem += 'Posso te ajudar com algo mais?';
 
-    console.log(`\n🎯 [MEGAZAP] Resumo:`);
+    console.log(`\n[MEGAZAP] Resumo:`);
     console.log(`   - Empresas processadas: ${empresasComNotas.length}`);
     console.log(`   - Total de notas: ${totalNotas}`);
     console.log(`   - Total de XMLs gerados: ${attachments.length}`);
 
     // Se não há anexos (nenhum XML foi gerado), enviar apenas texto
     if (attachments.length === 0) {
-        console.log('⚠️ [MEGAZAP] Nenhum XML gerado, enviando apenas texto');
+        console.log('[MEGAZAP] Nenhum XML gerado, enviando apenas texto');
         return await messageService.sendTextMessage(telefone, mensagem);
     }
 
@@ -704,7 +704,7 @@ async function gerarRespostaNotaFiscalUnificadaDesativada(telefone, notas, clien
         // Verificar se existe base64 do XML
         if (!nota.base64) {
             console.error(`[MEGAZAP] XML não encontrado para nota ${nota.numero}`);
-            mensagem += `⚠️ Infelizmente não foi possível gerar o XML desta nota.\n`;
+            mensagem += `Infelizmente não foi possível gerar o XML desta nota.\n`;
         } else {
             console.log(`[MEGAZAP] XML disponível para nota ${nota.numero}`);
 
@@ -732,7 +732,7 @@ async function gerarRespostaNotaFiscalUnificadaDesativada(telefone, notas, clien
 
     // Se não há anexos (nenhum XML foi gerado), enviar apenas texto
     if (attachments.length === 0) {
-        console.log('⚠️ [MEGAZAP] Nenhum XML gerado, enviando apenas texto');
+        console.log('[MEGAZAP] Nenhum XML gerado, enviando apenas texto');
         return await messageService.sendTextMessage(telefone, mensagem);
     }
 
@@ -780,7 +780,7 @@ async function processarFluxoAtendimento(telefone) {
  */
 function limparSessao(telefone) {
     estadosUsuarios.delete(telefone);
-    console.log(`🗑️ [MEGAZAP] Sessão limpa para ${telefone}`);
+    console.log(`[MEGAZAP] Sessão limpa para ${telefone}`);
 }
 
 /**

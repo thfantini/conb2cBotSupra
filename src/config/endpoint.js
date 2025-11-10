@@ -24,16 +24,16 @@ async function obterTokenAutorizacao() {
         const token = await tokenManager.obterTokenAtual();
 
         if (token) {
-            console.log('✅ Usando token do arquivo físico');
+            console.log('# Usando token do arquivo físico');
             return token;
         }
 
         // Fallback para .env se não encontrar no arquivo
-        console.log('⚠️ Token do arquivo não encontrado, usando .env como fallback');
+        console.log('# Token do arquivo não encontrado, usando .env como fallback');
         return process.env.API_BEARER_TOKEN;
 
     } catch (error) {
-        console.warn('⚠️ Erro ao obter token do arquivo, usando .env como fallback:', error.message);
+        console.warn('# Erro ao obter token do arquivo, usando .env como fallback:', error.message);
         return process.env.API_BEARER_TOKEN;
     }
 }
@@ -116,8 +116,8 @@ async function executeRequest(method, url, options = {}, retries = 3) {
                 ...options
             });
             
-            console.log('API Request:', logRequest);
-            console.log('✅ Status:', response.status);
+            console.log('# API Request:', logRequest);
+            console.log('Status:', response.status);
             
             return {
                 success: true,
@@ -134,7 +134,7 @@ async function executeRequest(method, url, options = {}, retries = 3) {
 
             // Se deve tentar novamente e ainda tem tentativas
             if (shouldRetry && attempt < retries) {
-                console.log(`⚠️ Tentativa ${attempt}/${retries} falhou. Tentando novamente...`);
+                console.log(`# Tentativa ${attempt}/${retries} falhou. Tentando novamente...`);
                 await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Delay progressivo
                 continue;
             }
@@ -143,9 +143,9 @@ async function executeRequest(method, url, options = {}, retries = 3) {
             const errorMessage = error.response?.data?.message || error.message;
             const statusCode = error.response?.status || 'N/A';
             
-            console.log('❌ Erro na requisição API. Request:', logRequest);
-            console.log('❌ Status:', statusCode);
-            console.log('❌ Erro:', errorMessage);
+            console.log('# Erro na requisição API. Request:', logRequest);
+            console.log('Status:', statusCode);
+            console.log('Erro:', errorMessage);
             
             return {
                 success: false,
@@ -174,7 +174,7 @@ function validarBloqueio(clienteData) {
     if (cliente.bloqueado === true) {
         return {
             blocked: true,
-            message: '🚫 Desculpe, seu cadastro está bloqueado no momento. Por favor, entre em contato com nosso atendimento para regularização.'
+            message: '# Desculpe, seu cadastro está bloqueado no momento. Por favor, entre em contato com nosso atendimento para regularização.'
         };
     }
 
@@ -325,7 +325,7 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     if (!clienteData || !clienteData.data || clienteData.data.length === 0) {
         return {
             hasPermission: false,
-            message: '❌ Cliente não encontrado.',
+            message: '# Cliente não encontrado.',
             contato: null
         };
     }
@@ -335,7 +335,7 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     if (!cliente.contatos || cliente.contatos.length === 0) {
         return {
             hasPermission: false,
-            message: '❌ Nenhum contato cadastrado para este cliente.',
+            message: '# Nenhum contato cadastrado para este cliente.',
             contato: null
         };
     }
@@ -400,7 +400,7 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     if (contatosComTelefone.length === 0) {
         return {
             hasPermission: false,
-            message: '❌ Telefone não encontrado nos contatos cadastrados.',
+            message: '# Telefone não encontrado nos contatos cadastrados.',
             contato: null
         };
     }
@@ -413,7 +413,7 @@ function validarPermissaoFaturamento(clienteData, telefone) {
     if (!contatoAutorizado) {
         return {
             hasPermission: false,
-            message: '⚠️ Este telefone não possui permissão para solicitar boletos.\n\nDeseja ser transferido para atendimento humano?',
+            message: '# Este telefone não possui permissão para solicitar boletos.\n\nDeseja ser transferido para atendimento humano?',
             contato: contatosComTelefone[0] // Retorna o primeiro contato encontrado
         };
     }
@@ -432,27 +432,27 @@ function validarPermissaoFaturamento(clienteData, telefone) {
  * @returns {Promise<Array>} Array de empresas com contatos válidos
  */
 async function processaContatos(empresas, celular) {
-    console.log(`🔍 [PROCESSA CONTATOS] Iniciando validação de ${empresas.length} empresa(s)`);
+    console.log(`# [PROCESSA CONTATOS] Iniciando validação de ${empresas.length} empresa(s)`);
 
     const empresasComContatosValidos = [];
 
     for (const empresa of empresas) {
-        console.log(`\n📋 [PROCESSA CONTATOS] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
+        console.log(`\n# [PROCESSA CONTATOS] Processando empresa: ${empresa.nome} (ID: ${empresa.id})`);
 
         // Verificar se a empresa tem contatos
         if (!empresa.contatos || !Array.isArray(empresa.contatos) || empresa.contatos.length === 0) {
-            console.log(`⚠️ [PROCESSA CONTATOS] Empresa ${empresa.nome} não possui contatos`);
+            console.log(`# [PROCESSA CONTATOS] Empresa ${empresa.nome} não possui contatos`);
             continue;
         }
 
-        console.log(`📞 [PROCESSA CONTATOS] Empresa possui ${empresa.contatos.length} contato(s)`);
+        console.log(`# [PROCESSA CONTATOS] Empresa possui ${empresa.contatos.length} contato(s)`);
 
         // Criar estrutura temporária para validação de permissão
         const dataTemp = { data: [empresa] };
         const permissaoStatus = validarPermissaoFaturamento(dataTemp, celular);
 
         if (permissaoStatus.hasPermission && permissaoStatus.contato) {
-            console.log(`✅ [PROCESSA CONTATOS] Contato válido encontrado: ${permissaoStatus.contato.nome}`);
+            console.log(`# [PROCESSA CONTATOS] Contato válido encontrado: ${permissaoStatus.contato.nome}`);
             console.log(`   - Telefone: ${permissaoStatus.contato.numero}`);
             console.log(`   - Autoriza Faturamento: ${permissaoStatus.contato.autorizaFaturamento}`);
 
@@ -465,12 +465,12 @@ async function processaContatos(empresas, celular) {
                 contatos: [permissaoStatus.contato] // Apenas o contato válido
             });
         } else {
-            console.log(`❌ [PROCESSA CONTATOS] Nenhum contato válido para empresa ${empresa.nome}`);
+            console.log(`# [PROCESSA CONTATOS] Nenhum contato válido para empresa ${empresa.nome}`);
             console.log(`   - Motivo: ${permissaoStatus.message || 'Sem permissão de faturamento'}`);
         }
     }
 
-    console.log(`\n🎯 [PROCESSA CONTATOS] Resultado: ${empresasComContatosValidos.length} empresa(s) com contatos válidos`);
+    console.log(`\n[PROCESSA CONTATOS] Resultado: ${empresasComContatosValidos.length} empresa(s) com contatos válidos`);
 
     return empresasComContatosValidos;
 }
@@ -503,11 +503,11 @@ async function getClienteByCelular(celular) {
         result.data.data = result.data.data.filter(empresa =>
             empresa.cpfCnpj && empresa.cpfCnpj.trim() !== ''
         );
-        console.log(`🔍 [VALIDAÇÃO CNPJ] Empresas antes do filtro: ${empresasOriginais}, após filtro: ${result.data.data.length}`);
+        console.log(`[VALIDAÇÃO CNPJ] Empresas antes do filtro: ${empresasOriginais}, após filtro: ${result.data.data.length}`);
 
         // Se não houver empresas com CNPJ após o filtro
         if (result.data.data.length === 0) {
-            console.log('⚠️ [VALIDAÇÃO CNPJ] Nenhuma empresa com CNPJ válido encontrada');
+            console.log('[VALIDAÇÃO CNPJ] Nenhuma empresa com CNPJ válido encontrada');
             return {
                 success: false,
                 data: result.data,
@@ -528,15 +528,15 @@ async function getClienteByCelular(celular) {
 
         if (!bloqueioStatus.blocked) {
             empresasValidas.push(empresa);
-            console.log(`✅ [VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Não bloqueada`);
+            console.log(`[VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Não bloqueada`);
         } else {
-            console.log(`❌ [VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Bloqueada: ${bloqueioStatus.message}`);
+            console.log(`[VALIDAÇÃO BLOQUEIO] Empresa ${empresa.nome} - Bloqueada: ${bloqueioStatus.message}`);
         }
     }
 
     // Se não houver empresas válidas após filtro de bloqueio
     if (empresasValidas.length === 0) {
-        console.log('⚠️ [VALIDAÇÃO BLOQUEIO] Todas as empresas estão bloqueadas');
+        console.log('[VALIDAÇÃO BLOQUEIO] Todas as empresas estão bloqueadas');
         return {
             success: false,
             data: result.data,
@@ -546,14 +546,14 @@ async function getClienteByCelular(celular) {
         };
     }
 
-    console.log(`🔍 [VALIDAÇÃO BLOQUEIO] Empresas válidas (não bloqueadas): ${empresasValidas.length}`);
+    console.log(`[VALIDAÇÃO BLOQUEIO] Empresas válidas (não bloqueadas): ${empresasValidas.length}`);
 
     // Processar contatos das empresas válidas
     const empresasComContatos = await processaContatos(empresasValidas, celularSemDDI);
 
     // Se nenhuma empresa tem contato válido
     if (empresasComContatos.length === 0) {
-        console.log('⚠️ [VALIDAÇÃO CONTATOS] Nenhum contato válido encontrado');
+        console.log('[VALIDAÇÃO CONTATOS] Nenhum contato válido encontrado');
         return {
             success: false,
             data: result.data,
@@ -564,7 +564,7 @@ async function getClienteByCelular(celular) {
     }
 
     // Cliente válido e autorizado com múltiplas empresas
-    console.log(`✅ [VALIDAÇÃO] ${empresasComContatos.length} empresa(s) válida(s) com contatos autorizados`);
+    console.log(`[VALIDAÇÃO] ${empresasComContatos.length} empresa(s) válida(s) com contatos autorizados`);
 
     return {
         success: true,
@@ -619,7 +619,7 @@ async function getClienteByCNPJ(cpfCnpj) {
         error: null,
         blocked: false,
         hasPermission: null, // Será validado posteriormente
-        message: '✅ Cliente encontrado! Agora preciso validar suas permissões.'
+        message: '# Cliente encontrado! Agora preciso validar suas permissões.'
     };
 }
 
@@ -631,11 +631,13 @@ async function getClienteByCNPJ(cpfCnpj) {
 async function getBoletosByCNPJ(idParceiro) {
     console.log('getBoletosByCNPJ:', idParceiro);
 
-    //Mock ( Cliente Supra )
-    if(idParceiro==724 || idParceiro==257){
-        idParceiro = 2136; //BNT BUSINESS
-        idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
-    }
+    /*
+        //Mock ( Cliente Supra )
+        if(idParceiro==724 || idParceiro==257){
+            idParceiro = 2136; //BNT BUSINESS
+            idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
+        }
+    */
 
     const result = await executeRequest('GET', '/financeiro/parcelas', {
         params: {
@@ -670,7 +672,7 @@ async function getBoletosByCNPJ(idParceiro) {
  * @returns {Promise<Object>} Dados do boleto em base64
  */
 async function geraBoletoPDF(idConta) {
-    console.log('🔄 geraBoletoPDF - Iniciando:', idConta);
+    console.log('# geraBoletoPDF - Iniciando:', idConta);
 
     try {
         // Fazer requisição com responseType arraybuffer para receber dados binários
@@ -685,8 +687,8 @@ async function geraBoletoPDF(idConta) {
             }
         });
 
-        console.log('📊 Status da resposta:', response.status);
-        console.log('📊 Content-Type:', response.headers['content-type']);
+        console.log('# Status da resposta:', response.status);
+        console.log('Content-Type:', response.headers['content-type']);
 
         // Se o status não for 200, tentar parsear como JSON de erro
         if (response.status !== 200) {
@@ -696,9 +698,9 @@ async function geraBoletoPDF(idConta) {
                 // Tentar converter buffer para JSON
                 const errorData = JSON.parse(Buffer.from(response.data).toString('utf-8'));
                 errorMessage = errorData.message || errorMessage;
-                console.log('❌ Erro JSON detectado:', errorData);
+                console.log('Erro JSON detectado:', errorData);
             } catch (e) {
-                console.log('❌ Não foi possível parsear erro como JSON');
+                console.log('Não foi possível parsear erro como JSON');
             }
 
             return {
@@ -719,7 +721,7 @@ async function geraBoletoPDF(idConta) {
         if (!isPDF) {
             try {
                 const errorData = JSON.parse(Buffer.from(response.data).toString('utf-8'));
-                console.log('❌ Resposta JSON (erro):', errorData);
+                console.log('# Resposta JSON (erro):', errorData);
 
                 return {
                     success: false,
@@ -727,7 +729,7 @@ async function geraBoletoPDF(idConta) {
                     data: null
                 };
             } catch (e) {
-                console.log('⚠️ Resposta não é PDF nem JSON válido');
+                console.log('# Resposta não é PDF nem JSON válido');
                 return {
                     success: false,
                     error: 'Resposta inválida do servidor',
@@ -742,7 +744,7 @@ async function geraBoletoPDF(idConta) {
         // Verificar se o PDF foi gerado (header PDF: %PDF)
         const pdfHeader = Buffer.from(response.data).toString('utf-8', 0, 5);
         if (!pdfHeader.startsWith('%PDF')) {
-            console.log('❌ Dados recebidos não são um PDF válido');
+            console.log('# Dados recebidos não são um PDF válido');
             return {
                 success: false,
                 error: 'Dados recebidos não são um PDF válido',
@@ -750,7 +752,7 @@ async function geraBoletoPDF(idConta) {
             };
         }
 
-        console.log('Boleto PDF gerado com sucesso!');
+        console.log('# Boleto PDF gerado com sucesso!');
         console.log('Tamanho:', response.data.length, 'bytes');
 
         return {
@@ -763,7 +765,7 @@ async function geraBoletoPDF(idConta) {
         };
 
     } catch (error) {
-        console.error('❌ Erro ao gerar boleto PDF:', error.message);
+        console.error('# Erro ao gerar boleto PDF:', error.message);
 
         return {
             success: false,
@@ -815,11 +817,13 @@ async function geraBoletoData(idConta) {
 async function getNotaByCNPJ(idParceiro) {
     console.log('getNotaByCNPJ:', idParceiro);
 
-    //Mock ( Cliente Supra )
-    if(idParceiro==724 || idParceiro==257){
-        idParceiro = 2136; //BNT BUSINESS
-        idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
-    }
+    /*
+        //Mock ( Cliente Supra )
+        if(idParceiro==724 || idParceiro==257){
+            idParceiro = 2136; //BNT BUSINESS
+            idParceiro = 2401; //INCOMED PRODUTOS E EQUIPAMENTOS LTDA
+        }
+    */
 
     const result = await executeRequest('GET', '/financeiro/parcelas', {
         params: {
@@ -956,7 +960,7 @@ function parseNotaFiscalXML(xmlString) {
             chaveAcesso
         };
     } catch (error) {
-        console.error('❌ Erro ao fazer parsing do XML:', error.message);
+        console.error('# Erro ao fazer parsing do XML:', error.message);
         return {
             numero: null,
             codigoVerificacao: null,
@@ -974,7 +978,7 @@ function parseNotaFiscalXML(xmlString) {
  * @returns {Promise<Object>} Dados da nota em base64 com informações extraídas
  */
 async function geraNotaXML(idConta) {
-    console.log('🔄 geraNotaXML - Iniciando:', idConta);
+    console.log('# geraNotaXML - Iniciando:', idConta);
 
     try {
         // Fazer requisição para obter o XML
@@ -988,13 +992,13 @@ async function geraNotaXML(idConta) {
             }
         });
 
-        console.log('📊 Status da resposta:', response.status);
-        console.log('📊 Content-Type:', response.headers['content-type']);
+        console.log('Status da resposta:', response.status);
+        console.log('Content-Type:', response.headers['content-type']);
 
         // Se o status não for 200, retornar erro
         if (response.status !== 200) {
             let errorMessage = response.data?.message || 'Erro ao gerar nota';
-            console.log('❌ Erro na requisição:', errorMessage);
+            console.log('Erro na requisição:', errorMessage);
 
             return {
                 success: false,
@@ -1005,7 +1009,7 @@ async function geraNotaXML(idConta) {
 
         // Verificar se a resposta tem a estrutura esperada
         if (!response.data || !response.data.success || !response.data.data || response.data.data.length === 0) {
-            console.log('❌ Resposta sem dados válidos');
+            console.log('Resposta sem dados válidos');
             return {
                 success: false,
                 error: 'Nota fiscal não encontrada',
@@ -1017,7 +1021,7 @@ async function geraNotaXML(idConta) {
         const xmlString = response.data.data[0].xml;
 
         if (!xmlString) {
-            console.log('❌ Campo XML não encontrado na resposta');
+            console.log('Campo XML não encontrado na resposta');
             return {
                 success: false,
                 error: 'XML não encontrado na resposta',
@@ -1028,7 +1032,7 @@ async function geraNotaXML(idConta) {
         // Verificar se o XML é válido (deve começar com < ou <?xml)
         const xmlHeader = xmlString.trim().substring(0, 5);
         if (!xmlHeader.startsWith('<?xml') && !xmlHeader.startsWith('<')) {
-            console.log('❌ Dados recebidos não são um XML válido');
+            console.log('Dados recebidos não são um XML válido');
             return {
                 success: false,
                 error: 'Dados recebidos não são um XML válido',
@@ -1042,7 +1046,7 @@ async function geraNotaXML(idConta) {
         // Fazer parsing do XML para extrair informações
         const dadosNota = parseNotaFiscalXML(xmlString);
 
-        console.log('✅ Nota XML gerada com sucesso!');
+        console.log('# Nota XML gerada com sucesso!');
         console.log('Tamanho:', xmlString.length, 'bytes');
         console.log('Número:', dadosNota.numero);
         console.log('Código Verificação:', dadosNota.codigoVerificacao);
@@ -1068,7 +1072,7 @@ async function geraNotaXML(idConta) {
         };
 
     } catch (error) {
-        console.error('❌ Erro ao gerar nota XML:', error.message);
+        console.error('Erro ao gerar nota XML:', error.message);
 
         return {
             success: false,
@@ -1084,7 +1088,7 @@ async function geraNotaXML(idConta) {
  * @returns {Promise<Object>} Token e dados de validade
  */
 async function gerarTokenERP() {
-    console.log('🔄 gerarTokenERP - Iniciando...');
+    console.log('gerarTokenERP - Iniciando...');
 
     try {
         // Buscar credenciais do .env
@@ -1105,7 +1109,7 @@ async function gerarTokenERP() {
             }
         });
 
-        console.log('📊 Status da resposta:', response.status);
+        console.log('Status da resposta:', response.status);
 
         // Verificar se o status não for 200
         if (response.status !== 200) {
@@ -1124,7 +1128,7 @@ async function gerarTokenERP() {
             throw new Error('Token ou data de validade não retornados');
         }
 
-        console.log('✅ Token ERP gerado com sucesso!');
+        console.log('# Token ERP gerado com sucesso!');
         console.log('Token:', token);
         console.log('Data de Validade:', dataValidade);
 
@@ -1145,7 +1149,7 @@ async function gerarTokenERP() {
         };
 
     } catch (error) {
-        console.error('❌ Erro ao gerar token ERP:', error.message);
+        console.error('# Erro ao gerar token ERP:', error.message);
 
         return {
             success: false,
@@ -1162,12 +1166,12 @@ async function gerarTokenERP() {
 async function testConnection() {
     try {
         const response = await apiClient.get('/health', { timeout: 5000 });
-        console.log('✅ API Externa conectada com sucesso!');
-        console.log(`🌐 Base URL: ${apiConfig.baseURL}`);
+        console.log('# API Externa conectada com sucesso!');
+        console.log(`# Base URL: ${apiConfig.baseURL}`);
         return true;
     } catch (error) {
-        console.log('⚠️ Aviso: Não foi possível conectar à API externa:', error.message);
-        console.log('🌐 Base URL configurada:', apiConfig.baseURL);
+        console.log('# Aviso: Não foi possível conectar à API externa:', error.message);
+        console.log('# Base URL configurada:', apiConfig.baseURL);
         return false;
     }
 }
